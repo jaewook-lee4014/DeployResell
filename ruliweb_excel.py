@@ -62,7 +62,13 @@ def hotdeal():
         
         for i in range(0,28):
             # id
-            elements = soup.select('tr.table_body > td.id')[10+i]
+            count_a = len(soup.find_all(class_="table_body notice"))
+            count_b = len(soup.find_all(class_="table_body notice inside"))
+            count_c = len(soup.find_all(class_="table_body best inside"))
+            
+            count_all = count_a+count_b+count_c
+            
+            elements = soup.select('tr.table_body > td.id')[count_all+i]
             article_num = elements.text
             article_num = article_num.replace(" ","") 
             article_num = article_num.replace("\n","")
