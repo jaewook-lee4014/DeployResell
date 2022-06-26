@@ -62,7 +62,7 @@ def hotdeal():
         
         for i in range(0,28):
             # id
-            elements = soup.select('tr.table_body > td.id')[8+i]
+            elements = soup.select('tr.table_body > td.id')[10+i]
             article_num = elements.text
             article_num = article_num.replace(" ","") 
             article_num = article_num.replace("\n","")
