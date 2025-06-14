@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import re
 import numpy as np
+import hashlib
 
 # 페이지 설정
 st.set_page_config(
@@ -18,6 +19,94 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# 비밀번호 설정 - Streamlit Secrets 사용
+def get_dashboard_password():
+    """Streamlit Secrets에서 비밀번호 가져오기"""
+    try:
+        return st.secrets["dashboard"]["password"]
+    except KeyError:
+        # Secrets가 설정되지 않은 경우 기본값 사용 (개발용)
+        st.warning("⚠️ Secrets가 설정되지 않았습니다. 기본 비밀번호를 사용합니다.")
+        return "hotdeal2024"
+
+def check_password():
+    """비밀번호 확인 함수"""
+    def password_entered():
+        """비밀번호 입력 확인"""
+        dashboard_password = get_dashboard_password()
+        if st.session_state["password"] == dashboard_password:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # 보안을 위해 비밀번호 삭제
+        else:
+            st.session_state["password_correct"] = False
+
+    # 로그인 상태 확인
+    if "password_correct" not in st.session_state:
+        # 첫 방문 - 비밀번호 입력 화면
+        st.markdown("""
+        <div style="
+            max-width: 400px; 
+            margin: 100px auto; 
+            padding: 2rem; 
+            background: white; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+        ">
+            <h2>🔐 대시보드 접근</h2>
+            <p>비밀번호를 입력하여 대시보드에 접근하세요</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.text_input(
+                "비밀번호", 
+                type="password", 
+                on_change=password_entered, 
+                key="password",
+                placeholder="비밀번호를 입력하세요"
+            )
+        return False
+    elif not st.session_state["password_correct"]:
+        # 비밀번호 틀림
+        st.markdown("""
+        <div style="
+            max-width: 400px; 
+            margin: 100px auto; 
+            padding: 2rem; 
+            background: white; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+        ">
+            <h2>🔐 대시보드 접근</h2>
+            <p>비밀번호를 입력하여 대시보드에 접근하세요</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.error("❌ 비밀번호가 올바르지 않습니다.")
+            st.text_input(
+                "비밀번호", 
+                type="password", 
+                on_change=password_entered, 
+                key="password",
+                placeholder="비밀번호를 입력하세요"
+            )
+        return False
+    else:
+        # 비밀번호 맞음 - 대시보드 표시
+        return True
+
+# 로그아웃 함수
+def logout():
+    """로그아웃 함수"""
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
 
 # 커스텀 CSS
 st.markdown("""
@@ -29,6 +118,13 @@ st.markdown("""
         margin-bottom: 2rem;
         color: white;
         text-align: center;
+        position: relative;
+    }
+    
+    .logout-btn {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
     }
     
     .metric-card {
@@ -192,13 +288,21 @@ def load_data():
 
 # 메인 함수
 def main():
-    # 헤더
-    st.markdown("""
-    <div class="main-header">
-        <h1>🛍️ 맘이베베 핫딜 대시보드</h1>
-        <p>실시간 가격 비교 및 핫딜 정보를 한눈에 확인하세요</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # 헤더와 로그아웃 버튼
+    col1, col2 = st.columns([4, 1])
+    
+    with col1:
+        st.markdown("""
+        <div class="main-header">
+            <h1>🛍️ 맘이베베 핫딜 대시보드</h1>
+            <p>실시간 가격 비교 및 핫딜 정보를 한눈에 확인하세요</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("<br>", unsafe_allow_html=True)  # 여백 추가
+        if st.button("🚪 로그아웃", key="logout_btn", use_container_width=True):
+            logout()
     
     # 데이터 로드
     df = load_data()
@@ -555,4 +659,5 @@ def main():
                 st.markdown(f"• **{mall}** - {count}개 ({percentage:.1f}%)")
 
 if __name__ == "__main__":
-    main() 
+    if check_password():
+        main() 
