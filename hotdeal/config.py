@@ -30,11 +30,13 @@ FILES = {
 
 # 크롤링 설정
 CRAWLING_CONFIG = {
-    'implicit_wait': 10,
-    'page_load_timeout': 30,
-    'sleep_between_requests': 1,
-    'sleep_after_cycle': 600,  # 10분
-    'max_retries': 3
+    'implicit_wait': 15,
+    'page_load_timeout': 45,
+    'sleep_between_requests': 3,
+    'sleep_after_cycle': 600,
+    'max_retries': 2,
+    'random_delay_min': 5,
+    'random_delay_max': 10
 }
 
 # 지원 쇼핑몰 XPath 설정
@@ -124,7 +126,18 @@ CHROME_OPTIONS = [
     '--disable-dev-shm-usage',
     '--disable-gpu',
     '--window-size=1920,1080',
-    '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    '--disable-blink-features=AutomationControlled',
+    '--disable-extensions-file-access-check',
+    '--disable-extensions-http-throttling',
+    '--disable-extensions-except',
+    '--disable-plugins-discovery',
+    '--disable-default-apps',
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-web-security',
+    '--allow-running-insecure-content',
+    '--disable-features=VizDisplayCompositor',
+    '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 ]
 
 # 정규식 패턴

@@ -32,27 +32,50 @@ class MomiBebeCrawler:
         self.naver_crawler = None
     
     def setup_driver(self) -> bool:
-        """Chrome 드라이버 설정"""
+        """Chrome 드라이버 설정 - 개선된 버전"""
         try:
             chrome_options = Options()
             
-            # 옵션 추가
+            # 기본 옵션 추가
             for option in CHROME_OPTIONS:
                 chrome_options.add_argument(option)
             
-            # 알림 설정
+            # 추가 실험적 옵션
             chrome_options.add_experimental_option("prefs", {
-                "profile.default_content_setting_values.notifications": 1
+                "profile.default_content_setting_values.notifications": 2,
+                "profile.default_content_settings.popups": 0,
+                "profile.managed_default_content_settings.images": 2,  # 이미지 로딩 비활성화로 속도 향상
+                "profile.default_content_setting_values.media_stream": 2,
             })
             
-            # 드라이버 생성 (macOS의 경우 chromedriver 경로 확인)
+            # 자동화 감지 우회
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
+            
+            # 드라이버 생성
             try:
-                # Homebrew로 설치된 chromedriver 사용
-                service = Service('/opt/homebrew/bin/chromedriver')
-                self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            except Exception:
-                # 시스템 PATH의 chromedriver 사용
+                # Windows 환경에서는 시스템 PATH의 chromedriver 사용
                 self.driver = webdriver.Chrome(options=chrome_options)
+            except Exception as e:
+                self.logger.error(f"Chrome 드라이버 생성 실패: {e}")
+                return False
+            
+            # 자동화 감지 우회를 위한 JavaScript 실행
+            try:
+                self.driver.execute_script("""
+                    if (navigator.webdriver) {
+                        delete navigator.webdriver;
+                    }
+                """)
+            except:
+                pass  # 이미 정의되어 있거나 삭제할 수 없는 경우 무시
+            
+            try:
+                self.driver.execute_cdp_cmd('Network.setUserAgentOverride', {
+                    "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                })
+            except:
+                pass  # CDP 명령이 실패하는 경우 무시
             
             # 페이지 로드 타임아웃 설정
             self.driver.set_page_load_timeout(CRAWLING_CONFIG['page_load_timeout'])
