@@ -1,14 +1,11 @@
 """
-네이버 카페 크롤러
+네이버 카페 크롤러 - Playwright 기반
 """
 import logging
 import time
+import asyncio
 from typing import List, Dict, Optional, Tuple
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from bs4 import BeautifulSoup
 import pandas as pd
 
@@ -20,52 +17,97 @@ from utils import (
 
 
 class CafeCrawler:
-    """네이버 카페 크롤러"""
+    """네이버 카페 크롤러 - Playwright 기반"""
     
-    def __init__(self, driver: webdriver.Chrome):
-        self.driver = driver
+    def __init__(self, driver=None):
+        # 기존 Selenium driver는 무시하고 Playwright 사용
         self.logger = logging.getLogger(__name__)
-        self.wait = WebDriverWait(driver, CRAWLING_CONFIG['implicit_wait'])
+        self.browser = None
+        self.context = None
+        self.page = None
+        self.playwright = None
         
-    @retry_on_failure(max_retries=CRAWLING_CONFIG['max_retries'])
-    def get_link_from_comments(self) -> str:
-        """댓글에서 링크 추출"""
+    async def setup_browser(self, headless=True):
+        """Playwright 브라우저 설정"""
+        try:
+            self.playwright = await async_playwright().start()
+            
+            self.browser = await self.playwright.chromium.launch(
+                headless=headless,
+                args=[
+                    '--no-sandbox',
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-web-security'
+                ]
+            )
+            
+            self.context = await self.browser.new_context(
+                viewport={'width': 1366, 'height': 768},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            )
+            
+            self.page = await self.context.new_page()
+            
+            # webdriver 탐지 방지
+            await self.page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            
+            self.logger.info("카페 크롤러 Playwright 브라우저 설정 완료")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"카페 크롤러 브라우저 설정 실패: {e}")
+            return False
+    
+    async def close_browser(self):
+        """브라우저 종료"""
+        try:
+            if self.browser:
+                await self.browser.close()
+            if self.playwright:
+                await self.playwright.stop()
+            self.logger.info("카페 크롤러 브라우저 종료 완료")
+        except Exception as e:
+            self.logger.error(f"카페 크롤러 브라우저 종료 실패: {e}")
+    
+    async def get_link_from_comments_async(self) -> str:
+        """댓글에서 링크 추출 - 비동기"""
         try:
             self.logger.debug("댓글에서 링크 추출 시작")
             
             # iframe 전환
             try:
-                iframe = self.wait.until(
-                    EC.presence_of_element_located((By.NAME, "cafe_main"))
-                )
-                self.driver.switch_to.frame(iframe)
-            except TimeoutException:
-                self.driver.switch_to.frame("cafe_main")
+                iframe = await self.page.query_selector('iframe[name="cafe_main"]')
+                if iframe:
+                    frame = await iframe.content_frame()
+                    if frame:
+                        self.page = frame
+            except Exception as e:
+                self.logger.warning(f"iframe 전환 실패: {e}")
             
             # 댓글 박스 찾기
-            comment_boxes = self.driver.find_elements(By.CLASS_NAME, 'comment_box')
+            comment_boxes = await self.page.query_selector_all('.comment_box')
             
             for comment in comment_boxes:
                 try:
                     # 작성자 여부 확인
-                    try:
-                        comment.find_element(By.CLASS_NAME, 'comment_badge_writer')
-                        is_writer = True
-                    except NoSuchElementException:
-                        is_writer = False
+                    writer_badge = await comment.query_selector('.comment_badge_writer')
+                    is_writer = writer_badge is not None
                     
                     if is_writer:
-                        comment_text_element = comment.find_element(By.CLASS_NAME, 'text_comment')
-                        
-                        # a 태그에서 링크 추출 시도
-                        try:
-                            link = comment_text_element.find_element(By.TAG_NAME, 'a').get_attribute('href')
-                            if link:
-                                self.logger.debug(f"댓글에서 링크 발견: {link}")
-                                return link
-                        except NoSuchElementException:
+                        comment_text_element = await comment.query_selector('.text_comment')
+                        if comment_text_element:
+                            
+                            # a 태그에서 링크 추출 시도
+                            link_element = await comment_text_element.query_selector('a')
+                            if link_element:
+                                link = await link_element.get_attribute('href')
+                                if link:
+                                    self.logger.debug(f"댓글에서 링크 발견: {link}")
+                                    return link
+                            
                             # 텍스트에서 정규식으로 링크 추출
-                            urls = extract_urls_from_text(comment_text_element.text)
+                            text = await comment_text_element.inner_text()
+                            urls = extract_urls_from_text(text)
                             if urls:
                                 self.logger.debug(f"정규식으로 링크 발견: {urls[0]}")
                                 return urls[0]
@@ -80,9 +122,12 @@ class CafeCrawler:
             self.logger.error(f"댓글 링크 추출 실패: {e}")
             return "NO_LINK"
     
-    @retry_on_failure(max_retries=CRAWLING_CONFIG['max_retries'])
+    def get_link_from_comments(self) -> str:
+        """댓글에서 링크 추출 - 동기 인터페이스"""
+        return asyncio.run(self.get_link_from_comments_async())
+    
     def extract_article_info(self, article_element) -> Optional[Dict]:
-        """게시글 정보 추출"""
+        """게시글 정보 추출 (BeautifulSoup 사용)"""
         try:
             # 게시글 번호
             matching_number_element = article_element.find(class_='inner_number')
@@ -119,124 +164,152 @@ class CafeCrawler:
             self.logger.error(f"게시글 정보 추출 실패: {e}")
             return None
     
-    @retry_on_failure(max_retries=CRAWLING_CONFIG['max_retries'])
-    def get_shopping_link(self, article_url: str) -> str:
-        """게시글에서 쇼핑몰 링크 추출"""
+    async def get_shopping_link_async(self, article_url: str) -> str:
+        """게시글에서 쇼핑몰 링크 추출 - 비동기"""
         try:
-            self.driver.get(article_url)
-            safe_sleep(CRAWLING_CONFIG['sleep_between_requests'])
+            await self.page.goto(article_url)
+            await asyncio.sleep(CRAWLING_CONFIG.get('sleep_between_requests', 3))
             
             # iframe 전환
             try:
-                iframe = self.wait.until(
-                    EC.presence_of_element_located((By.NAME, "cafe_main"))
-                )
-                self.driver.switch_to.frame(iframe)
-            except TimeoutException:
-                try:
-                    self.driver.switch_to.frame("cafe_main")
-                except:
-                    pass
+                iframe = await self.page.query_selector('iframe[name="cafe_main"]')
+                if iframe:
+                    frame = await iframe.content_frame()
+                    if frame:
+                        self.page = frame
+            except Exception as e:
+                self.logger.warning(f"iframe 전환 실패: {e}")
             
             # 본문에서 링크 찾기
             try:
-                link_element = self.driver.find_element(By.CLASS_NAME, 'se-link')
-                link = link_element.text
-                if link and link.startswith(('http://', 'https://')):
-                    return link
-            except NoSuchElementException:
+                link_element = await self.page.query_selector('.se-link')
+                if link_element:
+                    link = await link_element.inner_text()
+                    if link and link.startswith(('http://', 'https://')):
+                        return link
+            except Exception:
                 pass
             
             # 댓글에서 링크 찾기
-            link = self.get_link_from_comments()
+            link = await self.get_link_from_comments_async()
             return link if link != "NO_LINK" else "링크 없음"
             
         except Exception as e:
             self.logger.error(f"쇼핑몰 링크 추출 실패: {e}")
             return "링크 없음"
     
+    def get_shopping_link(self, article_url: str) -> str:
+        """게시글에서 쇼핑몰 링크 추출 - 동기 인터페이스"""
+        return asyncio.run(self._get_shopping_link_with_browser(article_url))
+    
+    async def _get_shopping_link_with_browser(self, article_url: str) -> str:
+        """브라우저 설정과 함께 쇼핑몰 링크 추출"""
+        try:
+            if not await self.setup_browser():
+                return "브라우저 설정 실패"
+            
+            result = await self.get_shopping_link_async(article_url)
+            return result
+            
+        finally:
+            await self.close_browser()
+    
     def crawl_new_articles(self, last_search_num: int) -> Tuple[List[Dict], int]:
-        """새로운 게시글 크롤링"""
+        """새로운 게시글 크롤링 - 동기 인터페이스"""
+        return asyncio.run(self._crawl_new_articles_async(last_search_num))
+    
+    async def _crawl_new_articles_async(self, last_search_num: int) -> Tuple[List[Dict], int]:
+        """새로운 게시글 크롤링 - 비동기 구현"""
         self.logger.info("맘이베베 크롤링 시작")
         
         new_articles = []
         current_max_num = last_search_num
         
-        for page in range(CAFE_CONFIG['max_pages']):
-            try:
-                # 페이지 로드
-                page_url = f"{CAFE_CONFIG['base_url']}&search.menuid={CAFE_CONFIG['menu_id']}&search.page={page + 1}"
-                self.driver.get(page_url)
-                safe_sleep(CRAWLING_CONFIG['sleep_between_requests'])
-                
-                # iframe 전환
+        try:
+            # 브라우저 설정
+            if not await self.setup_browser():
+                self.logger.error("브라우저 설정 실패")
+                return [], last_search_num
+        
+            for page in range(CAFE_CONFIG['max_pages']):
                 try:
-                    iframe = self.wait.until(
-                        EC.presence_of_element_located((By.NAME, "cafe_main"))
-                    )
-                    self.driver.switch_to.frame(iframe)
-                except TimeoutException:
-                    self.logger.warning(f"페이지 {page + 1} iframe 로드 실패")
-                    continue
-                
-                # HTML 파싱
-                soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-                article_board = soup.find_all(class_='article-board m-tcol-c')
-                
-                if len(article_board) < 2:
-                    self.logger.warning(f"페이지 {page + 1} 게시글 보드 찾기 실패")
-                    continue
-                
-                articles = article_board[1].find_all(class_='td_article')
-                
-                stop_crawling = False
-                
-                for index, article in enumerate(articles):
-                    article_info = self.extract_article_info(article)
-                    if not article_info:
+                    # 페이지 로드
+                    page_url = f"{CAFE_CONFIG['base_url']}&search.menuid={CAFE_CONFIG['menu_id']}&search.page={page + 1}"
+                    await self.page.goto(page_url)
+                    await asyncio.sleep(CRAWLING_CONFIG.get('sleep_between_requests', 3))
+                    
+                    # iframe 전환
+                    try:
+                        iframe = await self.page.query_selector('iframe[name="cafe_main"]')
+                        if iframe:
+                            frame = await iframe.content_frame()
+                            if frame:
+                                current_page = frame
+                            else:
+                                current_page = self.page
+                        else:
+                            current_page = self.page
+                    except Exception as e:
+                        self.logger.warning(f"페이지 {page + 1} iframe 로드 실패: {e}")
+                        current_page = self.page
+                    
+                    # HTML 파싱
+                    page_content = await current_page.content()
+                    soup = BeautifulSoup(page_content, 'html.parser')
+                    article_board = soup.find_all(class_='article-board m-tcol-c')
+                    
+                    if len(article_board) < 2:
+                        self.logger.warning(f"페이지 {page + 1} 게시글 보드 찾기 실패")
                         continue
                     
-                    matching_number = article_info['matching_number']
+                    articles = article_board[1].find_all(class_='td_article')
                     
-                    # 첫 번째 페이지의 첫 번째 게시글에서 현재 최신 번호 저장
-                    if page == 0 and index == 0:
-                        current_max_num = matching_number
-                        self.logger.info(f"현재 최신 번호: {current_max_num}")
+                    stop_crawling = False
                     
-                    # 이전 크롤링 번호와 비교
-                    if matching_number <= last_search_num:
-                        self.logger.info(f"이전 크롤링 지점 도달: {matching_number}")
-                        stop_crawling = True
-                        break
-                    
-                    # 새 게시글 처리
-                    if matching_number < current_max_num or page > 0:
-                        self.logger.info(f"새 게시글 처리: {matching_number}")
+                    for index, article in enumerate(articles):
+                        article_info = self.extract_article_info(article)
+                        if not article_info:
+                            continue
+                        
+                        matching_number = article_info['matching_number']
+                        
+                        # 최대 번호 업데이트
+                        if matching_number > current_max_num:
+                            current_max_num = matching_number
+                        
+                        # 이미 처리한 게시글인지 확인
+                        if matching_number <= last_search_num:
+                            self.logger.info(f"이미 처리된 게시글 도달: {matching_number}")
+                            stop_crawling = True
+                            break
                         
                         # 쇼핑몰 링크 추출
-                        shop_link = self.get_shopping_link(article_info['article_url'])
+                        shopping_link = await self.get_shopping_link_async(article_info['article_url'])
                         
-                        # 데이터 생성
-                        timestamp = get_current_timestamp()
-                        article_data = create_dataframe_row(
-                            timestamp=timestamp,
-                            source="맘이베베",
-                            article_id=matching_number,
-                            article_url=article_info['article_url'],
-                            original_title=article_info['article_title'],
-                            cleaned_title=article_info['product_title'],
-                            shop_url=shop_link,
-                            price=article_info['price']
+                        # 데이터 행 생성
+                        row_data = create_dataframe_row(
+                            article_info['matching_number'],
+                            article_info['article_title'],
+                            article_info['product_title'],
+                            article_info['price'],
+                            shopping_link
                         )
                         
-                        new_articles.append(article_data)
-                
-                if stop_crawling:
-                    break
+                        new_articles.append(row_data)
+                        self.logger.info(f"새 게시글 추가: {matching_number} - {article_info['product_title']}")
                     
-            except Exception as e:
-                self.logger.error(f"페이지 {page + 1} 크롤링 실패: {e}")
-                continue
+                    if stop_crawling:
+                        break
+                        
+                except Exception as e:
+                    self.logger.error(f"페이지 {page + 1} 처리 실패: {e}")
+                    continue
+        
+        except Exception as e:
+            self.logger.error(f"크롤링 실패: {e}")
+        
+        finally:
+            await self.close_browser()
         
         self.logger.info(f"크롤링 완료: {len(new_articles)}개 새 게시글")
         return new_articles, current_max_num 

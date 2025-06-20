@@ -1,11 +1,17 @@
-# selenium==4.15.0
-# beautifulsoup4==4.12.2
-# openpyxl==3.1.2
-# lxml==4.9.3
+# 웹 크롤링 - Playwright 기반
+playwright>=1.40.0
+beautifulsoup4>=4.12.2
+lxml>=4.9.3
+
+# 웹 애플리케이션
 streamlit>=1.32.0
+
+# 데이터 처리
 pandas>=2.0.0
 plotly>=5.18.0
 numpy>=1.24.0
 openpyxl>=3.1.2
+
+# HTTP 요청
 requests>=2.31.0
 
