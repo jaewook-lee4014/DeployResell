@@ -149,6 +149,40 @@ header,.summary{min-width:0}
 .si .exw{font-size:12px;color:var(--ink2);margin-top:6px;overflow-wrap:anywhere}
 .si .exw .tag{margin-right:4px}
 .si .links .exb{margin-left:auto;display:flex;gap:6px}
+/* 발굴 스크리닝 카드: 핵심 숫자만 칩으로. 초록=점수 받음, 회색=못 받음, 점선=판단 불가 */
+.si.c{padding:10px 12px}
+.si.c .nm{font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{display:inline-flex;align-items:baseline;gap:4px;font-size:13px;padding:3px 9px;border-radius:8px;border:1px solid var(--line);color:var(--muted);background:var(--surface);font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip b{font-weight:700}
+.chip .sm{font-size:11px;opacity:.8}
+.chip.y{color:var(--good);border-color:color-mix(in srgb,var(--good) 45%,transparent);background:color-mix(in srgb,var(--good) 9%,transparent)}
+.chip.na{border-style:dashed}
+.chip.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+.si.c .links{margin-top:8px;align-items:center}
+.si.c .links .exb{margin-left:auto}
+.si details.more{margin-top:6px;font-size:12px;color:var(--ink2)}
+.si details.more summary{cursor:pointer;color:var(--muted);width:max-content}
+.si details.more ul{margin-top:6px;padding-top:6px}
+.si.ex{border-style:dashed;padding:14px 16px}
+.si.ex .lbl{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px}
+.si.ex dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 12px;margin:12px 0 0;padding-top:12px;border-top:1px solid var(--line);font-size:13px}
+.si.ex dt{font-weight:600;color:var(--ink)}.si.ex dd{margin:0;color:var(--ink2)}
+@media(max-width:520px){.si.ex dl{grid-template-columns:minmax(0,1fr)}.si.ex dd{margin-bottom:6px}}
+/* 보관함 캡처 창: 카페 글(자동) | 가격비교(붙여넣기) */
+.modal .box.shots{width:min(1200px,100%);max-height:92vh;overflow:auto;align-content:start}
+.sh-top{display:flex;gap:10px;align-items:center}.sh-top h3{flex:1;margin:0;min-width:0;overflow-wrap:anywhere}
+.sh-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media(max-width:760px){.sh-grid{grid-template-columns:minmax(0,1fr)}}
+.sh{min-width:0;display:grid;gap:8px;align-content:start}
+.sh-h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:14px}.sh-h .plink{margin-left:auto}
+.sh-img{border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:70vh;background:#fff}.sh-img img{display:block;width:100%;height:auto}
+.sh-drop{border:2px dashed var(--line);border-radius:10px;padding:28px 16px;text-align:center;font-size:13px;color:var(--ink2);line-height:1.8;cursor:pointer}
+.sh-re{font-size:12px;color:var(--muted);border:1px dashed var(--line);border-radius:8px;padding:6px 10px;cursor:pointer}
+.sh-drop.on,.sh-re.on{border-color:var(--s1);background:color-mix(in srgb,var(--s1) 6%,transparent)}
+.stb{color:var(--warn);letter-spacing:1px}.stb .off{color:var(--muted);opacity:.6}
+.qtabs button[aria-selected="true"] .stb,.qtabs button[aria-selected="true"] .stb .off{color:inherit}
+.dup{font-size:11px;font-weight:600;color:var(--ink2);background:var(--hover);border-radius:99px;padding:1px 7px}
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
 </style>
 </head><body>
@@ -220,7 +254,6 @@ header,.summary{min-width:0}
    <div class="onbar"><div class="updated" id="srcUpdated"></div><button class="btn ghost sm" id="srcReload" type="button">새로고침</button></div>
    <div class="qtabs" id="srcFilter" role="tablist" aria-label="추천도" style="margin:0 0 12px"></div>
    <div class="src" id="srcList"></div>
-   <p class="sub" style="margin-top:14px">경쟁도는 처음엔 검색결과로 추정한 값이에요(<span class="tag">추정</span>). 가격비교 페이지를 열고 즐겨찾기 바의 <b>경쟁사 가져오기</b>를 누르면 실제 판매처 가격으로 다시 계산돼요(<span class="tag ok">실제</span>). 버튼 설치는 온라인 탭 아래에 있어요.</p>
   </div>
 
   <div data-panel="mon" hidden>
@@ -245,6 +278,10 @@ header,.summary{min-width:0}
  </section>
 </div>
 <div id="toast" role="status"></div>
+<div class="modal" id="shotBox" hidden role="dialog" aria-modal="true" aria-labelledby="shotTitle"><div class="box shots">
+ <div class="sh-top"><h3 id="shotTitle"></h3><button class="btn ghost sm" id="shotClose" type="button">닫기</button></div>
+ <div id="shotBody" class="sh-grid"></div>
+</div></div>
 <div class="modal" id="confirm" hidden role="dialog" aria-modal="true" aria-labelledby="cfTitle"><div class="box">
  <h3 id="cfTitle"></h3><div id="cfBody"></div>
  <div class="act"><button class="btn ghost sm" id="cfNo" type="button">아니요</button><button class="btn sm" id="cfYes" type="button">예, 바꿀게요</button></div>
@@ -361,46 +398,121 @@ function render(){if(!S.D)return;if(tab==='inv')renderInv();else if(tab==='onlin
 async function loadSrc(){if(!S.who||loadSrc.on)return;loadSrc.on=true;
  try{S.src=await api('loadSourcing',S.who);if(tab==='src')renderSrc()}
  catch(e){if(tab==='src')$('srcList').innerHTML=`<p class="empty">${esc(errMsg(e))}</p>`}finally{loadSrc.on=false}}
-S.srcMin=+(store.get('srcMin')||3);
-function renderSrc(){const X=S.src;if(!X)return;const st=X.status;
- $('srcUpdated').innerHTML=st?`마지막 확인 ${ago(st.at)} · 다음 확인 ${st.nextAt?new Date(st.nextAt).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}):'-'}${st.error?` · <span style="color:var(--crit)">${esc(st.error)}</span>`:''}`:'발굴 프로그램 연락 없음';
- // 음식(상하기 쉬움·보관 어려움)은 자동 제외 -> '제외됨' 에서 보고 [제외 해제]. 일반 목록에서 [제외] 도 가능
- const keep=X.items.filter(i=>!i.excluded),gone=X.items.filter(i=>i.excluded),exView=S.srcView==='ex';
- const cnt=n=>keep.filter(i=>i.stars>=n).length;
- $('srcFilter').innerHTML=[5,4,3,1].map(n=>`<button role="tab" type="button" data-m="${n}" aria-selected="${!exView&&S.srcMin===n}">${n===1?'전체':'★'+n+' 이상'} <span class="muted">${cnt(n)}</span></button>`).join('')
-  +`<button role="tab" type="button" data-x="1" aria-selected="${exView}">제외됨 <span class="muted">${gone.length}</span></button>`;
- document.querySelectorAll('#srcFilter [data-m]').forEach(b=>b.onclick=()=>{S.srcMin=+b.dataset.m;S.srcView='list';store.set('srcMin',S.srcMin);renderSrc()});
- document.querySelectorAll('#srcFilter [data-x]').forEach(b=>b.onclick=()=>{S.srcView='ex';renderSrc()});
- const L=(exView?gone.slice().sort((a,b)=>String(b.postedAt).localeCompare(String(a.postedAt)))
-  :keep.filter(i=>i.stars>=S.srcMin).sort((a,b)=>b.stars-a.stars||String(b.postedAt).localeCompare(String(a.postedAt)))).slice(0,150);
- const exLine=i=>{const m=i.manual;
-  if(i.excluded)return `<div class="exw">${m?`<span class="tag lowc">직접 제외</span>${esc(m.who)} · ${ago(m.at)}${i.autoExclude?'':' (자동 판단은 통과)'}`
-   :`<span class="tag lowc">자동 제외</span>${esc(i.excludeWhy||'음식')}`}</div>`;
-  if(m&&m.state==='include')return `<div class="exw"><span class="tag ok">제외 해제</span>${esc(m.who)} · ${ago(m.at)}${i.autoExclude?` · 자동 판단: ${esc(i.excludeWhy)}`:''}</div>`;
-  return ''};
- const exBtns=i=>`<span class="exb">${i.manual?`<button class="btn ghost sm" type="button" data-ex="auto" data-a="${esc(i.articleId)}" title="사람이 바꾼 값을 지우고 자동 판단으로">자동으로</button>`:''}`
-  +`<button class="btn ghost sm" type="button" data-ex="${i.excluded?'include':'exclude'}" data-a="${esc(i.articleId)}">${i.excluded?'제외 해제':'제외'}</button></span>`;
- const card=i=>{const pct=i.catPrice?Math.round((i.catPrice-(i.dealPriceNorm||i.dealPrice))/i.catPrice*100):null;
-  const comp=i.exact?`<span class="tag ok">실제</span> 근처 ${i.exact.near}곳 / ${i.exact.offers}곳`:`<span class="tag">추정</span> 근처 ${i.near??'-'}곳 / ${i.offers??'-'}곳`;
-  const q='https://search.shopping.naver.com/search/all?query='+encodeURIComponent(i.catTitle||i.name);
-  return `<article class="si"><div class="top"><span class="st" aria-label="추천도 ${i.stars}">${'★'.repeat(i.stars)}${'☆'.repeat(5-i.stars)}</span>
-   <span class="nm">${esc(i.name)}</span><span class="meta">${esc(i.mall||'')} · ${ago(i.postedAt)}</span></div>
-   <div class="nums num"><span>핫딜 <b>${num(i.dealPrice)}</b>원${i.dealPriceNorm&&i.dealPriceNorm!==i.dealPrice?` <span class="muted">(환산 ${num(i.dealPriceNorm)})</span>`:''}</span>
-    <span>최저가 <b>${i.catPrice?num(i.catPrice):'-'}</b>원${pct!=null?` <span class="${pct>0?'down':'up'}">${pct>0?pct+'% 쌈':Math.abs(pct)+'% 비쌈'}</span>`:''}</span>
-    <span>리뷰 ${num(i.reviews||0)}</span><span>${comp}</span></div>
-   <div class="cat">카탈로그: ${esc(i.catTitle||'')} ${i.matchConf&&i.matchConf!=='높음'?`<span class="tag lowc">매칭 ${esc(i.matchConf)}</span>`:''}${i.category?` · ${esc(i.category)}`:''}</div>${exLine(i)}
+// 별 필터는 '이상'이 아니라 정확히 그 별만 (겹쳐서 다시 검토하지 않게). 처음엔 카드가 있는 가장 높은 별
+S.srcStar=store.get('srcStar')==null?null:+store.get('srcStar');S.srcView='list';
+// 상태(카탈로그 단위): 목록 / 보관함(keep: 논의 후 구매할 후보) / 쓰레기통(확인 끝 + 음식 자동 제외)
+const srcBox=i=>i.manual&&i.manual.state==='keep'?'keep':i.excluded?'trash':'list';
+const srcRule=(i,n)=>(i.rules||[]).find(r=>r.rule===n)||{};
+// 같은 카탈로그 글은 카드 하나로: 추천도 높은 글 -> 최신 글을 대표로
+function srcGroups(items){const g=new Map();
+ items.forEach(i=>{const k=i.nvMid||('a'+i.articleId);(g.get(k)||g.set(k,[]).get(k)).push(i)});
+ return [...g.values()].map(a=>{a.sort((x,y)=>y.stars-x.stars||String(y.postedAt).localeCompare(String(x.postedAt)));return Object.assign({},a[0],{dups:a.length,posts:a})})}
+function srcChips(i){const eff=i.dealPriceNorm||i.dealPrice,pct=i.catPrice?Math.round((i.catPrice-eff)/i.catPrice*100):null;
+ const c=(ok,html,why)=>`<span class="chip ${ok===true?'y':ok===false?'n':'na'}"${why?` title="${esc(why)}"`:''}>${html}</span>`;
+ const r1=srcRule(i,'최저가보다 싸다'),r2=srcRule(i,'역대 최저가 수준'),r3=srcRule(i,'경쟁 약함'),r4=srcRule(i,'리뷰 많음');
+ const cp=i.exact?{n:i.exact.near,o:i.exact.offers,real:1}:{n:i.near,o:i.offers,real:0};
+ return c(r1.ok,(pct==null?'-':pct>=0?`<b>${pct}%</b> 저렴`:`<b>${-pct}%</b> 비쌈`)+` <span class="sm">${num(eff)} / ${i.catPrice?num(i.catPrice):'-'}</span>`,r1.why)
+  +c(r2.ok,`역대최저 ${r2.ok==null?'–':r2.ok?'✔':'✘'}`,r2.why)
+  +c(r3.ok,`경쟁 <b>${cp.n??'-'}/${cp.o??'-'}</b>${cp.real?' <span class="sm">실제</span>':''}`,r3.why)
+  +c(r4.ok,`리뷰 <b>${num(i.reviews||0)}</b>`,r4.why)
+  +(i.matchConf&&i.matchConf!=='높음'?`<span class="chip warn" title="다른 상품이 잡혔을 수 있어요. 가격비교를 열어 확인하세요">${i.matchConf==='보통'?'매칭주의':'매칭 '+esc(i.matchConf)}</span>`:'')}
+const SRC_DEMO={name:'데일리원 락토랩 장건강 유산균 30포',mall:'데일리원',stars:4,dealPrice:2900,dealPriceNorm:2900,catPrice:7800,reviews:13646,near:2,offers:13,matchConf:'높음',
+ rules:[{rule:'최저가보다 싸다',ok:true},{rule:'역대 최저가 수준',ok:null},{rule:'경쟁 약함',ok:true},{rule:'리뷰 많음',ok:true}]};
+function srcExample(){const R={cheaper:10,near:3,gap:'1,000원(또는 1%)',max:3,rev:300};
+ return `<details class="si ex" id="srcEx"${store.get('srcExClosed')?'':' open'}><summary class="lbl" style="cursor:pointer">(예시) 카드 읽는 법</summary>
+  <div class="top"><span class="st">★★★★☆</span><span class="nm">${esc(SRC_DEMO.name)}</span><span class="meta">${esc(SRC_DEMO.mall)} · 2시간 전</span></div>
+  <div class="chips">${srcChips(SRC_DEMO)}</div>
+  <dl>
+   <dt>★★★★☆</dt><dd>추천도 = 아래 칩 중 초록색(점수 받은 것)의 합. 점수가 곧 별 개수(0~5, 6점도 ★5). 위 ★ 버튼은 그 별만 보여줘요</dd>
+   <dt>63% 저렴 2,900 / 7,800</dt><dd>핫딜가 / 네이버 가격비교 최저가. ${R.cheaper}% 이상 싸면 +2.<br>양이 다르면 핫딜가를 카탈로그와 같은 양으로 환산해요: 용량(g·ml, g=ml로 봄) × 개수. 예) 핫딜 50g 4,000원 vs 최저가 100g 5,000원 → 핫딜 100g 8,000원 → 60% 비쌈</dd>
+   <dt>매칭 낮음 (확인 필요)</dt><dd>환산 근거가 없거나 의심스러우면 가격 점수를 주지 않고 표시해요: ① 한쪽에만 개수가 있음 ② 한쪽에만 용량이 있고 개수가 개·봉·팩 같은 포장 단위(1개에 얼마나 들었는지 모름. 포·정·T·매는 환산함) ③ 환산했더니 최저가보다 70% 이상 쌈(구성이 다를 수 있음). 칩에 마우스를 올리면 사유가 보여요</dd>
+   <dt>역대최저 ✔ ✘ –</dt><dd>우리가 쌓은 최저가 기록보다 싸거나 ${R.near}% 이내면 +2. –는 아직 기록이 없다는 뜻(처음 본 상품)</dd>
+   <dt>경쟁 2/13</dt><dd>최저가에서 ${R.gap} 이내에 붙은 판매처 / 비교한 판매처. ${R.max}곳 미만이면 경쟁 약함 +1. <b>실제</b>가 붙으면 가격비교 페이지에서 <b>경쟁사 가져오기</b>로 가져온 값, 없으면 검색결과로 추정한 값</dd>
+   <dt>리뷰 13,646</dt><dd>${R.rev}개 이상이면 +1 (수요 확인)</dd>
+   <dt>매칭주의</dt><dd>상품명이 조금 달라서 다른 맛·구성이 잡혔을 수 있어요. 가격 점수는 그대로 줘요</dd>
+   <dt>칩 색</dt><dd>초록 = 점수 받음 · 회색 = 못 받음 · 점선 = 판단할 수 없음. 칩에 마우스를 올리면 근거가 보여요</dd>
+   <dt>보관함 · 쓰레기통</dt><dd>확인한 카드는 둘 중 하나로 옮기면 목록에서 사라져요. <b>보관함</b> = 논의 후 구매할 후보, <b>쓰레기통</b> = 확인 끝(음식은 자동으로 여기 들어가요). 각 탭에서 되돌릴 수 있어요. 같은 상품 글이 여러 개면 카드 하나로 합쳐요</dd>
+  </dl></details>`}
+// 주의: Apps Script 가 페이지를 내보낼 때 // 를 주석으로 잘못 지우는 경우가 있어 문자열 안 슬래시는 \/\/ 로 쓴다
+function srcCard(i,view){const q='https:\/\/search.shopping.naver.com/search/all?query='+encodeURIComponent(i.catTitle||i.name);
+ const b=(st,label)=>`<button class="btn ghost sm" type="button" data-ex="${st}" data-a="${esc(i.articleId)}">${label}</button>`;
+ // 음식 자동 제외 상품은 '제외 해제'로 되돌려야 목록에 남는다
+ const back=i.autoExclude?'include':'auto';
+ const acts=view==='list'?b('keep','보관함')+b('exclude','쓰레기통'):view==='keep'?`<button class="btn sm" type="button" data-shot="${esc(i.articleId)}">캡처 보기</button>`+b(back,'목록으로')+b('exclude','쓰레기통'):b(back,'되돌리기')+b('keep','보관함');
+ const m=i.manual,why=view==='trash'?(m&&m.state==='exclude'?`${esc(m.who)} · ${ago(m.at)}`:`자동 제외 · ${esc(i.excludeWhy||'음식')}`):view==='keep'&&m?`${esc(m.who)} · ${ago(m.at)} 보관`:'';
+ return `<article class="si c"><div class="top"><span class="st" aria-label="추천도 ${i.stars}">${'★'.repeat(i.stars)}${'☆'.repeat(5-i.stars)}</span>
+  <span class="nm">${esc(i.name)}</span><span class="meta">${esc(i.mall||'')} · ${ago(i.postedAt)}${i.dups>1?` <span class="dup">글 ${i.dups}개</span>`:''}</span></div>
+  <div class="chips">${srcChips(i)}</div>
+  ${why?`<div class="exw">${why}</div>`:''}
+  <details class="more"><summary>자세히</summary>
+   <div class="cat">카탈로그: ${esc(i.catTitle||'')}${i.category?` · ${esc(i.category)}`:''}${i.dealPriceNorm&&i.dealPriceNorm!==i.dealPrice?` · 핫딜 원래가 ${num(i.dealPrice)}원`:''}</div>
    <ul>${(i.rules||[]).map(r=>`<li><span class="${r.ok?'y':'n'}">${r.ok?'✔':r.ok===null?'–':'✘'}</span><span>${esc(r.rule)} <b>+${r.pts}</b> · ${esc(r.why)}</span></li>`).join('')}</ul>
-   <div class="links"><a class="plink" href="${esc(i.catLink)}" target="_blank" rel="noopener">가격비교 열기</a><a class="plink" href="${esc(q)}" target="_blank" rel="noopener">쇼핑 검색</a><a class="plink" href="${esc(i.articleUrl)}" target="_blank" rel="noopener">카페 글</a>${exBtns(i)}</div></article>`};
- $('srcList').innerHTML=L.length?L.map(card).join(''):`<p class="empty">${exView?'제외된 상품이 없어요':X.items.length?'이 추천도 이상인 상품이 없어요':'아직 발굴한 상품이 없어요'}</p>`;
- document.querySelectorAll('#srcList [data-ex]').forEach(b=>b.onclick=()=>setSrcEx(b.dataset.a,b.dataset.ex))}
-// 같은 카탈로그의 글은 함께 바뀐다 (서버도 카탈로그ID 기준으로 저장)
+   ${i.dups>1?`<div class="cat">같은 상품 글: ${i.posts.map(p=>`<a class="plink" href="${esc(p.articleUrl)}" target="_blank" rel="noopener">${num(p.dealPrice)}원 · ${ago(p.postedAt)}</a>`).join(' ')}</div>`:''}
+  </details>
+  <div class="links"><a class="plink" href="${esc(i.catLink)}" target="_blank" rel="noopener">가격비교</a><a class="plink" href="${esc(q)}" target="_blank" rel="noopener">쇼핑검색</a><a class="plink" href="${esc(i.articleUrl)}" target="_blank" rel="noopener">카페 글</a><span class="exb">${acts}</span></div></article>`}
+function renderSrc(){const X=S.src;if(!X)return;const st=X.status,v=S.srcView;
+ $('srcUpdated').innerHTML=st?`마지막 확인 ${ago(st.at)} · 다음 확인 ${st.nextAt?new Date(st.nextAt).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}):'-'}${st.error?` · <span style="color:var(--crit)">${esc(st.error)}</span>`:''}`:'발굴 프로그램 연락 없음';
+ const G=srcGroups(X.items),by={list:[],keep:[],trash:[]};G.forEach(i=>by[srcBox(i)].push(i));
+ const STARS=[5,4,3,2,1,0],cnt=n=>by.list.filter(i=>i.stars===n).length;
+ if(S.srcStar==null||!STARS.includes(S.srcStar))S.srcStar=STARS.find(n=>cnt(n))??5;
+ $('srcFilter').innerHTML=STARS.map(n=>`<button role="tab" type="button" data-m="${n}" aria-selected="${v==='list'&&S.srcStar===n}" aria-label="별 ${n}개"><span class="stb">${'★'.repeat(n)}<span class="off">${'☆'.repeat(5-n)}</span></span> <span class="muted">${cnt(n)}</span></button>`).join('')
+  +`<button role="tab" type="button" data-v="keep" aria-selected="${v==='keep'}">보관함 <span class="muted">${by.keep.length}</span></button>`
+  +`<button role="tab" type="button" data-v="trash" aria-selected="${v==='trash'}">쓰레기통 <span class="muted">${by.trash.length}</span></button>`;
+ document.querySelectorAll('#srcFilter [data-m]').forEach(b=>b.onclick=()=>{S.srcStar=+b.dataset.m;S.srcView='list';store.set('srcStar',S.srcStar);renderSrc()});
+ document.querySelectorAll('#srcFilter [data-v]').forEach(b=>b.onclick=()=>{S.srcView=b.dataset.v;renderSrc()});
+ const t=i=>String((i.manual&&i.manual.at)||i.postedAt);
+ const L=(v==='list'?by.list.filter(i=>i.stars===S.srcStar).sort((a,b)=>String(b.postedAt).localeCompare(String(a.postedAt)))
+  :by[v].slice().sort((a,b)=>t(b).localeCompare(t(a)))).slice(0,200);
+ const empty={list:X.items.length?`★${S.srcStar} 상품이 없어요`:'아직 발굴한 상품이 없어요',keep:'보관함이 비었어요 · 목록에서 [보관함]을 누르면 여기 모여요',trash:'쓰레기통이 비었어요'}[v];
+ $('srcList').innerHTML=srcExample()+(L.length?L.map(i=>srcCard(i,v)).join(''):`<p class="empty">${empty}</p>`);
+ const ex=$('srcEx');if(ex&&ex.addEventListener)ex.addEventListener('toggle',()=>store.set('srcExClosed',ex.open?null:'1'));
+ document.querySelectorAll('#srcList [data-ex]').forEach(b=>b.onclick=()=>setSrcEx(b.dataset.a,b.dataset.ex));
+ document.querySelectorAll('#srcList [data-shot]').forEach(b=>b.onclick=()=>openShots(b.dataset.shot))}
+// 같은 카탈로그의 글은 함께 옮겨진다 (서버도 카탈로그ID 기준으로 저장)
 async function setSrcEx(aid,state){const X=S.src,it=X&&X.items.find(i=>i.articleId===aid);if(!it)return;
  const same=X.items.filter(i=>it.nvMid?i.nvMid===it.nvMid:i.articleId===aid),prev=same.map(i=>[i,i.manual,i.excluded]);
  const put=m=>same.forEach(i=>{i.manual=m;i.excluded=m?m.state==='exclude':i.autoExclude});
  put(state==='auto'?null:{state,who:S.who,at:new Date().toISOString()});renderSrc();
  try{const r=await api('setSourcingExclude',S.who,it.nvMid,it.articleId,state);put(r.manual);renderSrc();
-  toast(state==='exclude'?'제외했어요 · 제외됨 탭에서 되돌릴 수 있어요':state==='include'?'제외를 해제했어요':'자동 판단으로 되돌렸어요')}
+  toast(state==='keep'?'보관함에 넣었어요 · 카페 글은 1~2분 안에 자동 캡처돼요':state==='exclude'?'쓰레기통으로 옮겼어요':'목록으로 되돌렸어요')}
  catch(e){prev.forEach(([i,m,x])=>{i.manual=m;i.excluded=x});renderSrc();toast(errMsg(e))}}
+// ── 보관함 캡처 보기: 카페 글(작업기가 자동 캡처) + 가격비교(네이버 보안 확인 때문에 사람이 캡처해 붙여넣기)
+let shotIt=null,shotKind='catalog';
+const shotClose=()=>{$('shotBox').hidden=true;shotIt=null};
+async function openShots(aid){const it=S.src&&S.src.items.find(i=>i.articleId===aid);if(!it)return;
+ shotIt=it;S.shots=null;$('shotBox').hidden=false;renderShots();
+ try{const r=await api('loadSourcingShots',S.who,it.nvMid,it.articleId);if(shotIt!==it)return;S.shots=r;
+  shotKind=!r.catalog||!r.catalog.data?'catalog':!r.post||!r.post.data?'post':'catalog';renderShots()}
+ catch(e){$('shotBody').innerHTML=`<p class="empty">${esc(errMsg(e))}</p>`}}
+function sellersTable(x){return `<details class="more" open><summary>북마클릿으로 가져온 판매처 ${x.items.length}곳 · ${ago(x.at)}</summary><table class="ptbl">${x.items.slice(0,30).map((s,k)=>`<tr><td>${k+1}. ${esc(s.mall)}</td><td class="num">${num(s.price)}원</td></tr>`).join('')}</table></details>`}
+function shotPane(kind,label){const it=shotIt,s=S.shots&&S.shots[kind],link=kind==='post'?it.articleUrl:it.catLink,on=shotKind===kind?' on':'';
+ const file=t=>`<label class="linkbtn">${t}<input type="file" accept="image/*" data-kind="${kind}" hidden></label>`;
+ const head=`<div class="sh-h"><b>${label}</b>${s&&s.data?`<span class="muted">${ago(s.at)} · ${s.who==='auto'?'자동 캡처':esc(s.who)}</span>`:''}<a class="plink" href="${esc(link)}" target="_blank" rel="noopener">${label} 열기</a></div>`;
+ let body;
+ if(!S.shots)body='<p class="empty">불러오는 중…</p>';
+ else if(s&&s.data)body=`<div class="sh-img"><img src="${s.data}" alt="${label} 캡처"></div><div class="sh-re${on}" data-kind="${kind}" tabindex="0">다른 캡처로 바꾸기: 이 칸을 누르고 Ctrl+V · ${file('파일 선택')}</div>`;
+ else body=`<div class="sh-drop${on}" data-kind="${kind}" tabindex="0">${kind==='post'?(s&&s.err?`자동 캡처를 못 했어요: ${esc(s.err)}<br>`:'보관함에 넣으면 1~2분 안에 자동으로 캡처돼요. 잠시 뒤 다시 열어보세요.<br>직접 넣으려면 '):'가격비교는 네이버 보안 확인 때문에 자동 캡처가 안 돼요.<br>'}<b>${label} 열기</b> → <b>Win+Shift+S</b>로 캡처 → 이 칸을 누르고 <b>Ctrl+V</b><br>${file('또는 이미지 파일 선택')}</div>`;
+ return `<section class="sh">${head}${body}${kind==='catalog'&&S.shots&&S.shots.sellers?sellersTable(S.shots.sellers):''}</section>`}
+function renderShots(){const it=shotIt;if(!it)return;$('shotTitle').textContent=it.name;
+ $('shotBody').innerHTML=shotPane('post','카페 글')+shotPane('catalog','가격비교');
+ document.querySelectorAll('#shotBody input[type=file]').forEach(f=>f.onchange=()=>{if(f.files[0])uploadShot(f.dataset.kind,f.files[0])});
+ document.querySelectorAll('#shotBody .sh-drop,#shotBody .sh-re').forEach(d=>d.onclick=e=>{if(e.target.closest('label'))return;shotKind=d.dataset.kind;
+  document.querySelectorAll('#shotBody .on').forEach(x=>x.classList.remove('on'));d.classList.add('on');d.focus()})}
+// 창이 열려 있을 때 Ctrl+V: 선택된 칸(기본: 비어 있는 칸)에 저장
+document.addEventListener('paste',e=>{if($('shotBox').hidden||!shotIt)return;const f=[...((e.clipboardData&&e.clipboardData.items)||[])].find(x=>x.type.startsWith('image/'));
+ if(!f)return;e.preventDefault();uploadShot(shotKind,f.getAsFile())});
+// 큰 캡처는 폭 1200px JPEG 로 줄여서 저장 (시트 저장 한도 약 2MB)
+function shrink(file){return new Promise((ok,no)=>{const img=new Image(),u=URL.createObjectURL(file);
+ img.onload=()=>{const k=Math.min(1,1200/img.width),c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);let q=.82,d=c.toDataURL('image/jpeg',q);while(d.length>2.8e6&&q>.4){q-=.1;d=c.toDataURL('image/jpeg',q)}ok(d)};
+ img.onerror=()=>no(new Error('이미지를 읽지 못했어요'));img.src=u})}
+async function uploadShot(kind,file){const it=shotIt;if(!it)return;toast('캡처 저장 중…',6000);
+ try{const d=await shrink(file);await api('saveSourcingShot',S.who,it.nvMid,it.articleId,kind,d);if(shotIt!==it)return;
+  S.shots=S.shots||{};S.shots[kind]={at:new Date().toISOString(),who:S.who,data:d};renderShots();toast(kind==='post'?'카페 글 캡처를 저장했어요':'가격비교 캡처를 저장했어요')}
+ catch(e){toast(errMsg(e))}}
+$('shotClose').onclick=shotClose;
+$('shotBox').onclick=e=>{if(e.target.id==='shotBox')shotClose()};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('shotBox').hidden)shotClose()});
 $('srcReload').onclick=()=>{S.src=null;loadSrc()};
 setInterval(()=>{if(S.who&&tab==='src'&&!document.hidden)loadSrc()},120000);
 
@@ -408,7 +520,7 @@ setInterval(()=>{if(S.who&&tab==='src'&&!document.hidden)loadSrc()},120000);
 const SKU_KO={grape:'포도',apple:'사과',calmadi:'칼마디'};
 // 네이버 통합검색에서 출발해 사용자가 직접 눌러 들어가게 한다 (가격비교 직접 링크는 차단되기 쉬움)
 const SKU_Q={grape:'베러데이 키즈데이 포도맛 1100mg 90캡슐',apple:'베러데이 키즈데이 사과맛 1100mg 90캡슐',calmadi:'베러데이 키즈데이 칼마디 1100mg 120캡슐'};
-const SKU_URL=Object.fromEntries(Object.entries(SKU_Q).map(([k,q])=>[k,'https://search.naver.com/search.naver?where=nexearch&query='+encodeURIComponent(q)]));
+const SKU_URL=Object.fromEntries(Object.entries(SKU_Q).map(([k,q])=>[k,'https:\/\/search.naver.com/search.naver?where=nexearch&query='+encodeURIComponent(q)]));
 const ST_KO={SALE:'판매중',OUTOFSTOCK:'품절',SUSPENSION:'판매중지',CLOSE:'판매종료'};
 const ago=d=>{const m=Math.round((Date.now()-new Date(d))/6e4);return m<1?'방금':m<60?`${m}분 전`:m<1440?`${Math.round(m/60)}시간 전`:`${Math.round(m/1440)}일 전`};
 const miniCharts={};
@@ -539,7 +651,7 @@ function renderLow(){const L=S.low;if(!L)return;
   const head='<thead><tr><th>#</th><th style="text-align:left">판매처</th><th>가격</th><th>개당</th><th>변동</th><th>배송비</th><th>평점(리뷰)</th></tr></thead>';
   const pill=h.level==='ok'?`<span style="margin-left:auto" class="pill">${q.prevAt?(ch?`변동 ${ch}건`:'변동 없음'):'첫 기록'}</span>`:`<span style="margin-left:auto" class="pill ${h.level}">${esc(h.title)}</span>`;
   const failed=h.lastAttemptAt&&q.at!==h.lastAttemptAt&&h.fails>0,stale=h.level==='crit'?'stale':'';
-  return `<article class="card"><h2><i class="dot" style="background:var(${COL[i%3]})"></i>${esc(q.query)}<a class="plink" href="https://search.naver.com/search.naver?where=nexearch&query=${encodeURIComponent(q.query)}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer">네이버 ↗</a>${pill}</h2>
+  return `<article class="card"><h2><i class="dot" style="background:var(${COL[i%3]})"></i>${esc(q.query)}<a class="plink" href="https:\/\/search.naver.com/search.naver?where=nexearch&query=${encodeURIComponent(q.query)}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer">네이버 ↗</a>${pill}</h2>
    ${h.level!=='ok'?`<div class="iss ${h.level}" style="margin-top:12px"><b>${esc(h.title)}</b>${h.detail?`<span>${esc(h.detail)}</span>`:''}</div>`:''}
    ${!it.length?'<p class="empty" style="padding:24px 0">성공한 확인 기록이 없어요</p>':`<div class="${stale}">
    <div class="prices">${one?`<span>1개 최저 <b class="num">${won(one.price)}</b> <span class="muted">${esc(mallOf(one))}</span> ${delta(one)}</span>`:''}${unitBest?`<span>개당 최저 <b class="num">${won(unitBest.unit)}</b> <span class="muted">${esc(mallOf(unitBest))} · ${unitBest.qty}개</span></span>`:''}<span class="muted">판매처 ${malls}곳 · ${it.length}건</span></div>

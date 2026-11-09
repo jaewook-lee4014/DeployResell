@@ -315,6 +315,8 @@ function doPost(e) {
     if (body.op === 'supPull') return out_(supPull_(ss, body.status, body.take !== false, body.taker));
     if (body.op === 'lowest') return out_(saveLowest_(ss, body.cycles));
     if (body.op === 'sourcing') return out_(saveSourcing_(ss, body.items || [], body.status));
+    if (body.op === 'shotPull') return out_(shotPull_(ss));
+    if (body.op === 'shot') return out_(workerShot_(ss, body));
     return out_({ ok: false, error: 'unknown op' });
   } catch (err) {
     return out_({ ok: false, error: String(err && err.message || err) });
@@ -755,11 +757,11 @@ const SRC_KEYS = ['articleId', 'postedAt', 'mall', 'name', 'dealPrice', 'dealPri
   'sellers', 'reviews', 'near', 'offers', 'gap12', 'compSource', 'matchConf', 'points', 'stars', 'rules', 'histLow',
   'catLink', 'articleUrl', 'checkedAt', 'subject', 'autoExclude', 'excludeWhy', 'category'];
 // 음식 자동 제외(sourcing/perish.py: 카테고리·상품명 키워드)를 사람이 바꾼 기록. 카탈로그ID 기준, 아래쪽(최신)이 이긴다.
-// 상태: exclude(직접 제외) / include(제외 해제) / auto(자동 판단으로 되돌림). '발굴' 시트는 작업기가 덮어써서 따로 둔다.
+// 상태: keep(보관함) / exclude(쓰레기통) / include(제외 해제) / auto(자동 판단으로 되돌림). '발굴' 시트는 작업기가 덮어써서 따로 둔다.
 const SRC_EX_COLS = ['시각', '카탈로그ID', '글번호', '상태', '누가', '상품명'];
 const SRC_EXACT_COLS = ['시각', '카탈로그ID', '가져온 사람', '근처판매처', '판매처수', '1-2위차', '최저가', '판매처 목록(JSON)', '페이지'];
 const SRC_RULE = { gapWon: 1000, gapPct: 1, max: 3, pts: 1 }; // sourcing/config.py RULES 의 compete_* 와 같게
-const SRC_STARS = [[5, 5], [4, 4], [3, 3], [2, 2], [0, 1]];
+const SRC_STARS = [[5, 5], [4, 4], [3, 3], [2, 2], [1, 1], [0, 0]]; // 점수 = 별 (6점도 ★5). sourcing/config.py STARS 와 같게
 const SRC_SHOW_ROWS = 800;
 
 function saveSourcing_(ss, items, status) {
@@ -788,7 +790,7 @@ function saveSourcing_(ss, items, status) {
 
 function srcStars_(p) {
   for (let i = 0; i < SRC_STARS.length; i++) if (p >= SRC_STARS[i][0]) return SRC_STARS[i][1];
-  return 1;
+  return 0;
 }
 
 function captureSourcing_(d, who) {
@@ -847,6 +849,8 @@ function loadSourcing(code) {
       if (it.status !== 'ok') { noCat++; return; }
       it.articleId = String(it.articleId); it.nvMid = String(it.nvMid);
       it.rules = JSON.parse(it.rules || '[]');
+      it.points = Number(it.points) || 0;
+      it.stars = srcStars_(it.points); // 별 기준이 바뀌어도 예전 줄까지 같은 기준으로
       const e = exact[it.nvMid];
       if (e) {
         it.exact = e;
@@ -876,7 +880,7 @@ function srcManual_(ss) {
     sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues().forEach(function (r) {
       const key = String(r[1]) || ('a' + String(r[2]));
       if (r[3] === 'auto') delete out[key];
-      else out[key] = { state: String(r[3]), who: String(r[4]), at: iso_(r[0]) };
+      else out[key] = { state: String(r[3]), who: String(r[4]), at: iso_(r[0]), articleId: String(r[2]) };
     });
   }
   return out;
@@ -891,10 +895,10 @@ function srcExclude_(it, m) {
   it.excluded = m ? m.state === 'exclude' : it.autoExclude;
 }
 
-/** 발굴 탭 [제외] / [제외 해제] / [자동으로]. state: exclude | include | auto */
+/** 발굴 탭 카드 옮기기. state: keep(보관함: 논의 후 구매 후보) | exclude(쓰레기통) | include(음식 자동 제외를 풀고 목록으로) | auto(사람이 정한 값 지우기 = 목록으로) */
 function setSourcingExclude(code, nvMid, articleId, state) {
   code = check_(code);
-  if (['exclude', 'include', 'auto'].indexOf(state) < 0) throw new Error('잘못된 요청이에요');
+  if (['keep', 'exclude', 'include', 'auto'].indexOf(state) < 0) throw new Error('잘못된 요청이에요');
   nvMid = String(nvMid || '').replace(/[^0-9]/g, '');
   articleId = String(articleId || '').replace(/[^0-9]/g, '');
   if (!nvMid && !articleId) throw new Error('상품을 찾지 못했어요');
@@ -911,10 +915,123 @@ function setSourcingExclude(code, nvMid, articleId, state) {
     }
     if (!name) throw new Error('발굴 목록에 없는 상품이에요');
     sheet_(ss, '발굴제외', SRC_EX_COLS).appendRow([new Date().toISOString(), nvMid, articleId, state, code, txt_(name)]);
-    const KO = { exclude: '제외', include: '제외 해제', auto: '자동 판단' };
+    const KO = { keep: '보관함', exclude: '쓰레기통', include: '목록으로 (제외 해제)', auto: '목록으로' };
     if (ss.getSheetByName('기록')) log_(ss, code, '발굴 ' + name.slice(0, 40), '', KO[state]);
     const m = srcManual_(ss)[nvMid || ('a' + articleId)] || null;
     return { ok: true, manual: m };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ── 보관함 캡처 ─────────────────────────────────────────────
+// 보관함(keep)에 넣은 상품의 '카페 글'은 작업기(sourcing/shots.py)가 자동으로 캡처해 op=shot 으로 보낸다.
+// '가격비교' 페이지는 자동 브라우저에 캡차가 떠서, 사람이 캡처해 화면에서 붙여넣는다(saveSourcingShot).
+// 이미지는 드라이브 권한 없이 쓰려고 '발굴캡처' 시트에 4.5만 자씩 나눠 저장한다. 같은 상품·종류는 최신 것이 이긴다.
+const SHOT_COLS = ['시각', '키', '종류', '글번호', '순서', '데이터', '누가'];
+const SHOT_CHUNK = 45000;          // 셀 한 칸 5만 자 한도
+const SHOT_MAX = 3000000;          // data URL 최대 길이 (약 2.2MB 이미지)
+const SHOT_KINDS = { post: '카페 글', catalog: '가격비교' };
+
+function srcKey_(nvMid, articleId) {
+  nvMid = String(nvMid || '').replace(/[^0-9]/g, '');
+  articleId = String(articleId || '').replace(/[^0-9]/g, '');
+  if (!nvMid && !articleId) throw new Error('상품을 찾지 못했어요');
+  return { key: nvMid || ('a' + articleId), nvMid: nvMid, articleId: articleId };
+}
+
+/** 캡처 저장. dataUrl 이 빈 값이면 실패 기록(err)만 남긴다 (작업기가 같은 글을 계속 다시 시도하지 않게) */
+function putShot_(ss, k, kind, dataUrl, who, err) {
+  if (!SHOT_KINDS[kind]) throw new Error('잘못된 캡처 종류예요');
+  if (dataUrl) {
+    if (dataUrl.length > SHOT_MAX) throw new Error('이미지가 너무 커요 (2MB 이하로)');
+    if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/]+=*$/.test(dataUrl)) throw new Error('이미지 형식이 아니에요');
+  }
+  const sh = sheet_(ss, '발굴캡처', SHOT_COLS);
+  const at = new Date().toISOString();
+  const rows = [];
+  if (!dataUrl) rows.push([at, k.key, kind, k.articleId, 0, '', 'ERR:' + String(err || '실패').slice(0, 200)]);
+  for (let i = 0, n = 0; dataUrl && i < dataUrl.length; i += SHOT_CHUNK, n++) {
+    // 앞에 ' 를 붙여 항상 글자로 저장 (base64 조각이 + = 로 시작하거나 숫자로만 되면 수식·숫자로 바뀐다)
+    rows.push([at, k.key, kind, k.articleId, n, "'" + dataUrl.slice(i, i + SHOT_CHUNK), who]);
+  }
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, SHOT_COLS.length).setValues(rows);
+}
+
+/** 키별 최신 캡처 위치: { key: { kind: {at, who, rows:[행번호...], err} } } (데이터 열은 안 읽는다) */
+function shotIndex_(ss) {
+  const sh = ss.getSheetByName('발굴캡처');
+  const idx = {};
+  if (!sh || sh.getLastRow() < 2) return { sh: sh, idx: idx };
+  sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues().forEach(function (r, i) {
+    if (!r[0]) return;
+    const at = iso_(r[0]), key = String(r[1]), kind = String(r[2]);
+    const by = idx[key] = idx[key] || {};
+    // 캡처 한 벌은 순서 0 부터 이어서 쌓인다. 아래쪽(나중에 쌓인) 벌이 최신
+    if (!by[kind] || Number(r[4]) === 0) by[kind] = { at: at, who: '', rows: [], err: '' };
+    const who = String(r[6] || '');
+    if (who.indexOf('ERR:') === 0) by[kind].err = who.slice(4); else by[kind].who = who;
+    if (r[5] !== '') by[kind].rows.push({ row: i + 2, n: Number(r[4]) });
+  });
+  return { sh: sh, idx: idx };
+}
+
+/** 작업기: 카페 글 캡처가 필요한 보관함 상품 */
+function shotPull_(ss) {
+  const manual = srcManual_(ss);
+  const idx = shotIndex_(ss).idx;
+  const want = [];
+  Object.keys(manual).forEach(function (key) {
+    const m = manual[key];
+    if (m.state !== 'keep' || (idx[key] && idx[key].post)) return;
+    want.push({ key: key, nvMid: key.charAt(0) === 'a' ? '' : key, articleId: m.articleId });
+  });
+  return { ok: true, items: want.slice(0, 5) };
+}
+
+function workerShot_(ss, body) {
+  const k = srcKey_(body.nvMid, body.articleId);
+  putShot_(ss, k, body.kind || 'post', body.data || '', 'auto', body.error);
+  return { ok: true };
+}
+
+/** 화면: 보관함 상품을 누르면 캡처 두 장 + 북마클릿으로 가져온 판매처 목록 */
+function loadSourcingShots(code, nvMid, articleId) {
+  check_(code);
+  const ss = book_();
+  const k = srcKey_(nvMid, articleId);
+  const si = shotIndex_(ss);
+  const by = si.idx[k.key] || {};
+  const out = { key: k.key };
+  Object.keys(SHOT_KINDS).forEach(function (kind) {
+    const s = by[kind];
+    if (!s) { out[kind] = null; return; }
+    const rows = s.rows.slice().sort(function (a, b) { return a.n - b.n; });
+    const data = rows.map(function (x) { return String(si.sh.getRange(x.row, 6).getValue()).replace(/^'/, ''); }).join('');
+    out[kind] = { at: s.at, who: s.who, err: s.err, data: data };
+  });
+  out.sellers = null;
+  const ex = ss.getSheetByName('발굴경쟁');
+  if (k.nvMid && ex && ex.getLastRow() > 1) {
+    ex.getRange(2, 1, ex.getLastRow() - 1, 8).getValues().forEach(function (r) {
+      if (String(r[1]) === k.nvMid) out.sellers = { at: iso_(r[0]), who: String(r[2]), near: Number(r[3]), items: JSON.parse(r[7] || '[]') };
+    });
+  }
+  return out;
+}
+
+/** 화면: 사람이 붙여넣은 캡처 저장 (가격비교, 또는 자동 캡처가 안 된 카페 글) */
+function saveSourcingShot(code, nvMid, articleId, kind, dataUrl) {
+  code = check_(code);
+  const k = srcKey_(nvMid, articleId);
+  if (!dataUrl) throw new Error('이미지가 비었어요');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ss = book_();
+    putShot_(ss, k, kind, String(dataUrl), code);
+    if (ss.getSheetByName('기록')) log_(ss, code, '발굴 캡처 ' + SHOT_KINDS[kind], '', k.key);
+    return { ok: true, at: new Date().toISOString() };
   } finally {
     lock.releaseLock();
   }

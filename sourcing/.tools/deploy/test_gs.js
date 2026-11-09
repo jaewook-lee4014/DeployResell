@@ -89,4 +89,43 @@ threw = false; try { run(`setSourcingExclude('zz', '444', '4', 'exclude')`); } c
 ok(threw, '코드네임 확인');
 threw = false; try { run(`setSourcingExclude('mk', '444', '4', 'drop')`); } catch (e) { threw = true; }
 ok(threw, '상태값 확인');
+
+// 5) 보관함(keep): 목록·쓰레기통 아님, 작업기가 덮어써도 유지, 음식 자동 제외여도 보관함이 이긴다
+r = run(`setSourcingExclude('mk', '222', '2', 'keep')`);
+ok(r.ok && r.manual.state === 'keep', '보관함 저장');
+post({ token: 'tok', op: 'sourcing', items: [item(2, '222', 3, 3)] });
+m = run(`loadSourcing('mk')`).items.find(i => i.nvMid === '222');
+ok(m.manual.state === 'keep' && m.excluded === false, '작업기가 덮어써도 보관함 유지');
+run(`setSourcingExclude('mk', '444', '4', 'keep')`);
+m = run(`loadSourcing('mk')`).items.find(i => i.nvMid === '444');
+ok(m.manual.state === 'keep' && m.excluded === false && m.autoExclude === true, '음식 자동 제외 상품도 보관함 가능');
+run(`setSourcingExclude('mk', '222', '2', 'auto')`);
+ok(run(`loadSourcing('mk')`).items.find(i => i.nvMid === '222').manual === null, '보관함에서 목록으로');
+ok(String(sheets['기록'].rows.slice(-1)[0][4]) === '목록으로', '기록 탭에 한글 상태');
+
+// 6) 보관함 캡처: 작업기가 카페 글 캡처할 목록 -> 저장(여러 칸으로 나눔) -> 화면에서 읽기, 사람이 가격비교 붙여넣기
+run(`setSourcingExclude('mk', '222', '2', 'keep')`);
+r = post({ token: 'tok', op: 'shotPull' });
+ok(r.ok && r.items.length === 2 && r.items.some(x => x.key === '222' && x.articleId === '2'), 'shotPull: 보관함 상품(카페 글 캡처 없음)');
+const big = 'data:image/jpeg;base64,' + '+AbC/9'.repeat(20000) + '==';  // 12만 자 -> 3칸
+r = post({ token: 'tok', op: 'shot', nvMid: '222', articleId: '2', kind: 'post', data: big });
+ok(r.ok && sheets['발굴캡처'].rows.length === 4 && sheets['발굴캡처'].rows[1][5].startsWith("'"), '캡처 저장: 3칸 + 글자로 저장');
+r = post({ token: 'tok', op: 'shotPull' });
+ok(r.items.length === 1 && r.items[0].key === '444', '캡처한 상품은 다시 안 나옴');
+post({ token: 'tok', op: 'shot', nvMid: '444', articleId: '4', kind: 'post', error: '로그인이 필요한 글' });
+ok(post({ token: 'tok', op: 'shotPull' }).items.length === 0, '실패도 기록해서 계속 다시 시도하지 않음');
+let S6 = run(`loadSourcingShots('mk', '222', '2')`);
+ok(S6.post && S6.post.data === big && S6.post.who === 'auto' && S6.catalog === null, '화면: 카페 글 캡처 그대로 복원');
+ok(run(`loadSourcingShots('mk', '444', '4')`).post.err.includes('로그인'), '화면: 자동 캡처 실패 사유');
+const small = 'data:image/png;base64,iVBORw0KGgo=';
+ok(run(`saveSourcingShot('mk', '111', '1', 'catalog', '${small}')`).ok, '사람이 가격비교 캡처 붙여넣기');
+S6 = run(`loadSourcingShots('mk', '111', '1')`);
+ok(S6.catalog.data === small && S6.catalog.who === 'mk' && S6.sellers && S6.sellers.near === 4 && S6.sellers.items.length === 5, '화면: 가격비교 캡처 + 북마클릿 판매처 목록');
+run(`saveSourcingShot('mk', '111', '1', 'catalog', 'data:image/png;base64,QUJD')`);
+ok(run(`loadSourcingShots('mk', '111', '1')`).catalog.data === 'data:image/png;base64,QUJD', '다시 붙여넣으면 최신 것');
+threw = false; try { run(`saveSourcingShot('mk', '111', '1', 'catalog', 'javascript:alert(1)')`); } catch (e) { threw = /형식/.test(e.message); }
+ok(threw, '이미지가 아니면 거부');
+threw = false; try { run(`saveSourcingShot('zz', '111', '1', 'catalog', '${small}')`); } catch (e) { threw = true; }
+ok(threw, '캡처 저장도 코드네임 확인');
+ok(post({ token: 'bad', op: 'shotPull' }).error === 'unauthorized', 'shotPull 토큰 확인');
 process.exit(fail ? 1 : 0);
