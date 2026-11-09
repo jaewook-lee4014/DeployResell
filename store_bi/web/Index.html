@@ -37,12 +37,34 @@ button,input,select{font:inherit;color:inherit}
 .btn.sm{padding:6px 12px;border-radius:8px;font-size:13px}
 #gateErr{color:var(--crit);font-size:13px;min-height:20px;margin:0}
 /* 앱 */
-header{display:flex;align-items:center;gap:12px;margin-bottom:8px}
-header h1{font-size:18px;margin:0;flex:1}
+/* 상단: 고정 바(이름·사용자) + 용도별로 묶은 탭. 모바일은 가로 스크롤 */
+.topbar{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+ margin:-20px -16px 20px;padding:12px 16px 0;border-bottom:1px solid var(--line)}
+header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+header h1{font-size:17px;margin:0;flex:1;display:flex;align-items:center;gap:8px;min-width:0}
+header h1 .logo{width:26px;height:26px;border-radius:8px;background:var(--ink);color:var(--surface);display:grid;place-items:center;font-size:13px;font-weight:700;flex:none}
+header h1 .cur{font-size:14px;font-weight:500;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header h1 .cur::before{content:"/";margin-right:8px;color:var(--line)}
 .who{font-size:13px;font-weight:600;padding:3px 10px;border-radius:99px;background:var(--hover)}
-nav{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:20px}
-nav button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 14px;color:var(--ink2);font-weight:600;cursor:pointer}
-nav button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+nav.tabs{display:flex;align-items:flex-end;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:10px;scroll-padding-inline:16px}
+nav.tabs::-webkit-scrollbar{display:none}
+.tg{display:grid;gap:4px;flex:none}
+.tg+.tg{padding-left:6px;margin-left:2px;border-left:1px solid var(--line)}
+.tg-l{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.02em;padding-left:4px}
+.tg-b{display:flex;gap:2px;padding:3px;border-radius:12px;background:var(--hover)}
+nav.tabs [role=tab]{display:inline-flex;align-items:center;gap:6px;background:none;border:0;border-radius:9px;padding:7px 11px;color:var(--ink2);font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap}
+nav.tabs [role=tab] svg{width:16px;height:16px;flex:none;opacity:.75}
+nav.tabs [role=tab]:hover{color:var(--ink)}
+nav.tabs [role=tab][aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08),0 0 0 1px color-mix(in srgb,var(--ink) 22%,transparent)}
+/* 발굴 필터: 별점 필터와 보관함·쓰레기통 사이를 띄운다 */
+#srcFilter [data-v="keep"]{margin-left:auto}
+@media(max-width:640px){#srcFilter [data-v="keep"]{margin-left:0}}
+nav.tabs [role=tab][aria-selected="true"] svg{opacity:1}
+@media(max-width:640px){.tg-l{display:none}.tg+.tg{padding-left:4px}nav.tabs [role=tab]{padding:7px 9px}}
+/* 화면 머리: 제목 + 한 줄 설명. 그 아래 상태 줄(마지막 확인·새로고침) */
+.phead{margin:4px 0 14px}
+.phead h2{font-size:20px;margin:0;letter-spacing:-.01em}
+.phead p{margin:2px 0 0;font-size:13px;color:var(--ink2)}
 .summary{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin-bottom:16px}
 .summary .big{font-size:17px;font-weight:600}
 .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:24px}
@@ -80,8 +102,8 @@ details.plan summary{cursor:pointer;color:var(--ink2);font-size:14px;width:max-c
 .plink{font-size:12px;font-weight:500;color:var(--s1);text-decoration:none;padding:2px 6px;border-radius:6px}
 .plink:hover{background:var(--hover)}
 .btn:disabled{opacity:.45;cursor:not-allowed}
-.onbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
-.updated{font-size:12px;color:var(--muted);flex:1;min-width:0}
+.onbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding:8px 8px 8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.updated{font-size:13px;color:var(--ink2);flex:1;min-width:0}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:16px;z-index:20}
 .modal .box{background:var(--surface);border-radius:14px;padding:20px;width:min(420px,100%);display:grid;gap:10px;font-size:14px}
 .modal h3{margin:0 0 4px;font-size:17px}
@@ -122,7 +144,7 @@ header,.summary{min-width:0}
 .row2{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:12px}
 @media(max-width:760px){.row2{grid-template-columns:minmax(0,1fr)}}
 .toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}
-.toolbar select{padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.toolbar select,.yearsel{padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
 .log{list-style:none;margin:0;padding:0}
 .log li{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);font-size:14px}
 .log time{color:var(--muted);font-size:13px}
@@ -198,18 +220,27 @@ header,.summary{min-width:0}
  </section>
 
  <section id="app" hidden>
-  <header><h1>마마솔루션 재고</h1><span class="who" id="who"></span><button class="btn ghost sm" id="logout" type="button">나가기</button></header>
-  <nav role="tablist">
-   <button role="tab" data-tab="inv" aria-selected="true">재고</button>
-   <button role="tab" data-tab="online" aria-selected="false">온라인</button>
-   <button role="tab" data-tab="lowest" aria-selected="false">최저가<span class="bdg" id="bdgLow" hidden></span></button>
-   <button role="tab" data-tab="src" aria-selected="false">발굴</button>
-   <button role="tab" data-tab="mon" aria-selected="false">모니터</button>
-   <button role="tab" data-tab="sales" aria-selected="false">판매</button>
-   <button role="tab" data-tab="log" aria-selected="false">기록</button>
+  <div class="topbar">
+  <header><h1><span class="logo" aria-hidden="true">M</span><span>마마솔루션</span><span class="cur" id="curTab"></span></h1><span class="who" id="who"></span><button class="btn ghost sm" id="logout" type="button">나가기</button></header>
+  <nav class="tabs" role="tablist" aria-label="메뉴" id="tabs">
+   <div class="tg" role="presentation"><span class="tg-l">우리 상품</span><div class="tg-b" role="presentation">
+    <button role="tab" data-tab="inv" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>재고</button>
+    <button role="tab" data-tab="online" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="8" cy="8" r="1.5"/></svg>가격·경쟁사</button>
+    <button role="tab" data-tab="sales" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>판매</button>
+   </div></div>
+   <div class="tg" role="presentation"><span class="tg-l">시장 조사</span><div class="tg-b" role="presentation">
+    <button role="tab" data-tab="lowest" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6l7 7 4-4 7 7"/><path d="M21 10v6h-6"/></svg>최저가 추적<span class="bdg" id="bdgLow" hidden></span></button>
+    <button role="tab" data-tab="src" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>신상품 발굴</button>
+   </div></div>
+   <div class="tg" role="presentation"><span class="tg-l">관리</span><div class="tg-b" role="presentation">
+    <button role="tab" data-tab="mon" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 8-6-16-3 8H2"/></svg>모니터</button>
+    <button role="tab" data-tab="log" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>수정 기록</button>
+   </div></div>
   </nav>
+  </div>
 
   <div data-panel="inv">
+   <div class="phead"><h2>재고</h2><p>베러데이 키즈데이 3종의 실제 재고, 소진 예상일, 추천 구매량</p></div>
    <div class="summary" id="summary"></div>
    <div class="cards" id="cards"></div>
    <details class="plan"><summary>계산 기준</summary>
@@ -226,6 +257,7 @@ header,.summary{min-width:0}
   </div>
 
   <div data-panel="online" hidden>
+   <div class="phead"><h2>가격·경쟁사</h2><p>스마트스토어 판매가와 네이버 가격비교 경쟁사, 가격 맞추기</p></div>
    <div class="onbar"><div class="updated" id="onUpdated"></div><button class="btn ghost sm" id="refreshBtn" type="button">업데이트</button></div>
    <div class="cards" id="onCards"></div>
    <details class="plan" id="bmBox"><summary>경쟁사 가격 가져오기 버튼 설치</summary><div style="margin-top:10px;font-size:14px;display:grid;gap:8px">
@@ -245,18 +277,21 @@ header,.summary{min-width:0}
   </div>
 
   <div data-panel="lowest" hidden>
+   <div class="phead"><h2>최저가 추적</h2><p>네이버쇼핑 검색 최저가를 1시간마다 기록해요</p></div>
    <div class="onbar"><div class="updated" id="lwUpdated"></div><button class="btn ghost sm" id="crawlBtn" type="button">업데이트</button></div>
    <div id="lwIssues"></div>
    <div class="lw" id="lwCards"></div>
   </div>
 
   <div data-panel="src" hidden>
+   <div class="phead"><h2>신상품 발굴</h2><p>맘이베베 핫딜을 가격비교 최저가와 비교한 추천 후보 · 상하기 쉬운 음식은 자동으로 쓰레기통에 들어가요</p></div>
    <div class="onbar"><div class="updated" id="srcUpdated"></div><button class="btn ghost sm" id="srcReload" type="button">새로고침</button></div>
    <div class="qtabs" id="srcFilter" role="tablist" aria-label="추천도" style="margin:0 0 12px"></div>
    <div class="src" id="srcList"></div>
   </div>
 
   <div data-panel="mon" hidden>
+   <div class="phead"><h2>모니터</h2><p>PC에서 도는 수집 프로그램 상태와 최근 로그</p></div>
    <div class="onbar"><div class="updated" id="monUpdated"></div><button class="btn ghost sm" id="monReload" type="button">새로고침</button></div>
    <div id="monIssues"></div>
    <div class="cards mon2" id="monCards"></div>
@@ -265,7 +300,8 @@ header,.summary{min-width:0}
   </div>
 
   <div data-panel="sales" hidden>
-   <div class="toolbar"><select id="year" aria-label="기간"></select></div>
+   <div class="phead" style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:0"><h2>판매</h2><p>매출·수량·이익 (스마트스토어 주문 기준)</p></div>
+    <select id="year" aria-label="기간" class="yearsel"></select></div>
    <div class="kpis" id="kpis"></div>
    <div class="row2">
     <div class="card"><h2 class="section-t">월 매출</h2><div class="chart"><canvas id="cRev" aria-label="월 매출"></canvas></div></div>
@@ -274,7 +310,9 @@ header,.summary{min-width:0}
    <div class="card" style="margin-top:12px"><h2 class="section-t">연도별 이익 <span style="font-weight:400;font-size:12px;color:var(--ink2)">베러데이 3종</span></h2><div class="twrap" id="profit"></div></div>
   </div>
 
-  <div data-panel="log" hidden><ul class="log" id="log"></ul></div>
+  <div data-panel="log" hidden>
+   <div class="phead"><h2>수정 기록</h2><p>누가 언제 재고·가격 기준·발굴 제외를 바꿨는지</p></div>
+   <div class="card" style="padding:4px 16px"><ul class="log" id="log"></ul></div></div>
  </section>
 </div>
 <div id="toast" role="status"></div>
@@ -318,10 +356,16 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()}
 setInterval(refresh,120000);
 
 // ── 탭
-let tab='inv';
-function goTab(t){tab=t;document.querySelectorAll('[role=tab]').forEach(x=>x.setAttribute('aria-selected',x.dataset.tab===t));
+// 위쪽 메뉴 탭만 (발굴 필터 같은 화면 안 탭은 건드리지 않는다). 마지막에 본 탭을 기억, ←/→ 로 이동
+const TABS=[...document.querySelectorAll('#tabs [role=tab]')];
+let tab=TABS.some(b=>b.dataset.tab===store.get('kd-tab'))?store.get('kd-tab'):'inv';
+function goTab(t,focus){tab=t;store.set('kd-tab',t);
+ TABS.forEach(x=>{const on=x.dataset.tab===t;x.setAttribute('aria-selected',on);x.tabIndex=on?0:-1;if(on){$('curTab').textContent=x.textContent.trim().replace(/\d+$/,'');
+  if(x.scrollIntoView)x.scrollIntoView({block:'nearest',inline:'nearest'});if(focus)x.focus()}});
  document.querySelectorAll('[data-panel]').forEach(p=>p.hidden=p.dataset.panel!==tab);render()}
-document.querySelectorAll('[role=tab]').forEach(b=>b.onclick=()=>goTab(b.dataset.tab));
+TABS.forEach((b,i)=>{b.onclick=()=>goTab(b.dataset.tab);
+ b.onkeydown=e=>{const d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(d){e.preventDefault();goTab(TABS[(i+d+TABS.length)%TABS.length].dataset.tab,true)}}});
+goTab(tab);
 
 // ── 재고 계산
 const COL=['--s1','--s2','--s3'];
