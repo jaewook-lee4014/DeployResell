@@ -152,7 +152,13 @@ header,.summary{min-width:0}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
 #toast.on{opacity:1}
 /* 발굴 */
-.src{display:grid;gap:10px}
+.src{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.src>.si.ex,.src>.empty{grid-column:1/-1}
+@media(max-width:760px){.src{grid-template-columns:minmax(0,1fr)}}
+/* 2열: 같은 줄 카드 높이를 맞추고 버튼 줄은 카드 아래에 붙인다 */
+.src>.si.c{display:flex;flex-direction:column}
+.src>.si.c .links{margin-top:auto;padding-top:8px}
+.src>.si.c .top .meta{flex-basis:100%;order:3}
 .si{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;min-width:0}
 .si .top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .si .st{color:var(--warn);font-size:15px;letter-spacing:1px;flex:none}

@@ -109,9 +109,10 @@ ok(card('grape').includes('가격비교 최저 (판매처 미확인)') && card('
 ok(card('grape').includes('최저가 1위'), '포도: 우리 쿠폰가 21,500 < 23,480 이면 1위');
 ok(card('apple').includes('가격비교 페이지에서 가져옴') && card('apple').includes('템스윈공식몰') && !card('apple').includes('미확인'), '사과: 북마클릿이 더 최근이면 북마클릿 값');
 ok(card('calmadi').includes('자동 검색') && !card('calmadi').includes('GAJU') && card('calmadi').includes('권혁유통 · 배송 3,000 포함') && card('calmadi').includes('₩24,500'), '칼마디: 오래된 북마클릿 대신 자동 검색, 배송비 포함 가격');
-ok(T.prefill('grape', 'price') === 23490 && T.prefill('grape', 'mall') === '써클홀딩스' && T.prefill('apple', 'mall') === '템스윈공식몰', '[가격 맞추기] 미리 채우기: 더 최근 값의 1위');
+ok(T.prefill('grape', 'price') === 23480 && T.prefill('grape', 'mall') === '가격비교 최저' && T.prefill('calmadi', 'price') === 22000 && T.prefill('apple', 'mall') === '템스윈공식몰', '[가격 맞추기] 미리 채우기: 더 최근 값, 목록보다 싼 가격비교 최저가 우선');
+ok(!card('grape').includes('가격비교 표시가'), '오래된 북마클릿의 우리 표시가 문구는 안 씀');
 T.S.auto.at = ago2(3); T.S.caps = {}; T.renderOnline();
-ok(els.onCards.innerHTML.includes('오래된 값이에요') && T.prefill('grape', 'price') === 23490, '3시간 지난 자동 값: 오래됨 표시 (6시간까지는 미리 채움)');
+ok(els.onCards.innerHTML.includes('오래된 값이에요') && T.prefill('grape', 'price') === 23480, '3시간 지난 자동 값: 오래됨 표시 (6시간까지는 미리 채움)');
 T.S.auto = null; T.renderOnline();
 ok(els.onCards.innerHTML.includes('경쟁사 가격 필요'), '자동 값도 없으면 예전처럼 경쟁사 가격 필요');
 process.exit(fail ? 1 : 0);
