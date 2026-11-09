@@ -598,7 +598,7 @@ function renderOnline(){const O=S.online,P=S.plan;
   const byPage={};(o.addons||[]).forEach(a=>(byPage[a.onSku]=byPage[a.onSku]||[]).push(won(a.price)));
   return `<article class="card"><h2><i class="dot" style="background:var(${COL[i]})"></i>${sk.name}<a class="plink" href="${SKU_URL[sk.id]}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" title="네이버 검색 → 가격비교 눌러 이동">네이버 ↗</a><span style="margin-left:auto" class="pill ${!isFinite(min)?'warn':first?'good':'crit'}">${!isFinite(min)?'경쟁사 가격 필요':first?'최저가 1위':'최저가 아님'}</span></h2>
    <div class="prices"><span>판매가 <b class="num">${won(o.price)}</b></span><span>쿠폰가 <b class="num">${won(o.couponPrice)}</b></span></div>
-   <div class="sub">${cap?.ours!=null?`가격비교 표시가 ${won(cap.ours)} (판매가에서 ${won(o.price-cap.ours)} 할인)`:`쿠폰 ${won(P.coupon||0)} 기준`} · 페이지 재고 ${num(o.stock??0)}개 · ${ST_KO[o.status]||esc(o.status)}</div>
+   <div class="sub">${useCap&&cap.ours!=null?`가격비교 표시가 ${won(cap.ours)} (판매가에서 ${won(o.price-cap.ours)} 할인)`:`쿠폰 ${won(P.coupon||0)} 기준`} · 페이지 재고 ${num(o.stock??0)}개 · ${ST_KO[o.status]||esc(o.status)}</div>
    ${Object.keys(byPage).length?`<div class="sub">추가상품 · ${Object.entries(byPage).map(([k,v])=>`${SKU_KO[k]} 페이지 ${v.join('·')}`).join(' / ')}</div>`:''}
    ${comps[0]?.at?`<div class="sub" style="margin-top:10px${old?';color:var(--warn)':''}">경쟁사 가격 · ${ago(comps[0].at)} ${srcTxt}${old?' · 오래된 값이에요':''}</div>`:''}
    ${comps.length?`<ol class="comps">${rows.slice(0,6).map(li).join('')}</ol>${rows.length>6?`<details class="more"><summary class="sub" style="cursor:pointer;margin-top:6px">나머지 ${rows.length-6}곳 보기</summary><ol class="comps" style="border:0;padding-top:6px;margin-top:0">${rows.slice(6).map((r,k)=>li(r,k+6)).join('')}</ol></details>`:''}`:`<p class="sub" style="margin:12px 0 0;padding-top:12px;border-top:1px solid var(--line)">네이버 쇼핑에서 본 경쟁사 최저가를 아래에 넣으면 순위와 추이가 쌓여요.</p>`}
@@ -614,7 +614,10 @@ function onlineAuto(id){const a=S.auto,s=a&&a.skus&&a.skus[id];return s&&s.comps
 function prefill(id,k){const fresh=t=>t&&Date.now()-new Date(t)<6*3600e3;
  const c=S.caps?.[id],a=onlineAuto(id),useCap=fresh(c&&c.at)&&(!fresh(a&&a.at)||new Date(c.at)>=new Date(a.at));
  if(useCap){const x=c.items.find(x=>!x.mall.includes('마마솔루션'));return x?x[k]:''}
- if(fresh(a&&a.at)){const x=a.comps[0];return k==='price'?x.eff:x.mall}
+ if(fresh(a&&a.at)){const x=a.comps[0],o=S.online&&S.online.skus&&S.online.skus[id],low=a.catalog&&a.catalog.low;
+  // 목록에 없는 판매처의 가격비교 최저가가 더 싸면 그걸로 (우리 판매가·쿠폰가와 같으면 우리 것)
+  if(low&&low<x.eff&&(!o||(low!==o.price&&low!==o.couponPrice)))return k==='price'?low:'가격비교 최저';
+  return k==='price'?x.eff:x.mall}
  return ''}
 function jobView(id,j){
  if(!j.phase)return `<div class="planrow" style="margin-top:14px;gap:8px"><label style="flex:1;min-width:120px">지금 경쟁사 최저가 (원)<input id="cp-${id}" type="number" min="0" step="10" inputmode="numeric" style="width:100%" value="${prefill(id,'price')}"></label><label style="flex:1;min-width:100px">판매처 (선택)<input id="cm-${id}" type="text" maxlength="30" style="width:100%" value="${esc(prefill(id,'mall'))}"></label></div><button class="btn go" data-analyze="${id}">가격 맞추기</button>`;
