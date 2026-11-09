@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<base target="_top">
+<title>마마솔루션 재고</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* 레이아웃: 좁은 단일 컬럼(최대 960px), 맨 위 상태 한 줄 → 맛별 카드 3장 → 차트 하나. 숫자가 주인공, 글은 라벨만. */
+:root{
+ --bg:#f4f6f4;--surface:#ffffff;--ink:#16201c;--ink2:#5d6863;--muted:#8b948f;--line:#e2e7e3;--hover:#eef2ef;
+ --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;
+ --good:#0ca30c;--warn:#c98500;--crit:#d03b3b;
+ --font:"IBM Plex Sans KR",-apple-system,"Malgun Gothic",sans-serif;
+ color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+ --bg:#0e1210;--surface:#171c19;--ink:#eef1ee;--ink2:#a6afaa;--muted:#7d8781;--line:#2a312d;--hover:#202723;
+ --s1:#3987e5;--s2:#d95926;--s3:#199e70;--good:#2bbd2b;--warn:#e0a020;--crit:#e66767;color-scheme:dark}}
+:root[data-theme="dark"]{
+ --bg:#0e1210;--surface:#171c19;--ink:#eef1ee;--ink2:#a6afaa;--muted:#7d8781;--line:#2a312d;--hover:#202723;
+ --s1:#3987e5;--s2:#d95926;--s3:#199e70;--good:#2bbd2b;--warn:#e0a020;--crit:#e66767;color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--font);margin:0}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+.wrap{max-width:960px;margin:0 auto;padding-inline:16px;padding-block:20px 56px}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+/* 입장 */
+#gate{min-height:80vh;display:grid;place-items:center}
+#gate form{width:min(320px,100%);display:grid;gap:12px;text-align:center}
+#gate h1{font-size:22px;margin:0 0 8px}
+#gate input{padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);text-align:center;font-size:17px;letter-spacing:.08em}
+.btn{border:0;border-radius:10px;padding:11px 16px;background:var(--ink);color:var(--surface);font-weight:600;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink2);border:1px solid var(--line)}
+.btn.sm{padding:6px 12px;border-radius:8px;font-size:13px}
+#gateErr{color:var(--crit);font-size:13px;min-height:20px;margin:0}
+/* 앱 */
+header{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+header h1{font-size:18px;margin:0;flex:1}
+.who{font-size:13px;font-weight:600;padding:3px 10px;border-radius:99px;background:var(--hover)}
+nav{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:20px}
+nav button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 14px;color:var(--ink2);font-weight:600;cursor:pointer}
+nav button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+.summary{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin-bottom:16px}
+.summary .big{font-size:17px;font-weight:600}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:24px}
+@media(max-width:760px){.cards{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
+.card h2{font-size:15px;margin:0;display:flex;align-items:center;gap:8px}
+.dot{width:10px;height:10px;border-radius:3px;flex:none}
+.stock{display:flex;align-items:baseline;gap:6px;margin:14px 0 4px}
+.stock b{font-size:40px;line-height:1;font-weight:700;letter-spacing:-.02em}
+.stock button{margin-left:auto}
+.stock input{width:90px;font-size:28px;font-weight:700;padding:2px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:3px 10px;border-radius:99px;border:1px solid currentColor}
+.pill.crit{color:var(--crit)}.pill.warn{color:var(--warn)}.pill.good{color:var(--good)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:8px 12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);font-size:14px}
+.kv dt{color:var(--ink2)}.kv dd{margin:0;font-weight:600;text-align:right}
+.sub{font-size:12px;color:var(--muted);margin-top:4px}
+details.plan{margin-bottom:24px}
+details.plan summary{cursor:pointer;color:var(--ink2);font-size:14px;width:max-content}
+.planrow{display:flex;flex-wrap:wrap;gap:12px 20px;margin-top:12px}
+.planrow label{display:grid;gap:4px;font-size:12px;color:var(--ink2)}
+.planrow input,.planrow select{width:120px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.section-t{font-size:15px;margin:0 0 10px}
+.prices{display:flex;flex-wrap:wrap;gap:6px 18px;margin:12px 0 4px;font-size:14px}
+.prices b{font-size:20px;letter-spacing:-.01em}
+.comps{list-style:none;margin:12px 0 0;padding:12px 0 0;border-top:1px solid var(--line);display:grid;gap:6px;font-size:14px}
+.comps li{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:8px;align-items:center}
+.comps .rk{color:var(--muted);font-size:12px}.comps .m{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.comps li.us{font-weight:700}
+.mini{position:relative;height:110px;margin-top:12px}
+.prop{margin-top:14px;padding:12px;border-radius:10px;background:var(--hover);font-size:14px;display:grid;gap:6px}
+.prop .row{display:flex;justify-content:space-between;gap:12px}
+.prop .act{display:flex;gap:8px;margin-top:6px}
+.prop .note{font-size:12px;color:var(--warn)}
+.card .go{width:100%;margin-top:14px}
+.plink{font-size:12px;font-weight:500;color:var(--s1);text-decoration:none;padding:2px 6px;border-radius:6px}
+.plink:hover{background:var(--hover)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.onbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.updated{font-size:12px;color:var(--muted);flex:1;min-width:0}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:16px;z-index:20}
+.modal .box{background:var(--surface);border-radius:14px;padding:20px;width:min(420px,100%);display:grid;gap:10px;font-size:14px}
+.modal h3{margin:0 0 4px;font-size:17px}
+.modal .row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--line)}
+.modal .act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.legend{display:flex;gap:14px;font-size:13px;color:var(--ink2);margin-bottom:6px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.chart{position:relative;height:240px;min-width:0}
+.chart canvas{max-width:100%}
+header,.summary{min-width:0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+@media(max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi .l{font-size:13px;color:var(--ink2)}.kpi .v{font-size:24px;font-weight:700;letter-spacing:-.01em;margin-top:2px}
+.bars{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+.bar{min-width:0}
+.bar .track{overflow:hidden}
+.ptbl{width:100%;border-collapse:collapse;font-size:14px}.ptbl th,.ptbl td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}.ptbl th:first-child,.ptbl td:first-child{text-align:left}.ptbl th{font-size:12px;font-weight:500;color:var(--ink2)}.ptbl tr.sel td{font-weight:700}
+.kpi .s{font-size:12px;color:var(--ink2);margin-top:2px}
+.twrap{overflow-x:auto}
+.ptbl td.t{text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis}.ptbl td.t a{color:inherit;text-decoration:none}.ptbl td.t a:hover{text-decoration:underline}
+.up{color:var(--s2)}.down{color:var(--s1)}
+.lw{display:grid;gap:12px}.lw .mini{height:140px}
+.cards.mon2{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:0}@media(max-width:760px){.cards.mon2{grid-template-columns:minmax(0,1fr)}}
+.mlog{margin:0;max-height:320px;overflow:auto;font:12px/1.55 ui-monospace,Consolas,monospace;color:var(--ink2);white-space:pre-wrap;word-break:break-all}
+.mact{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.linkbtn{background:none;border:0;padding:0;color:var(--s1);cursor:pointer;font-size:inherit}
+.issues{display:grid;gap:8px;margin-bottom:12px}.issues .linkbtn{justify-self:start;font-size:13px}
+.iss{border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:10px;padding:10px 12px;background:var(--surface);display:grid;gap:2px;font-size:14px;min-width:0;overflow-wrap:anywhere}
+.iss.crit{border-left-color:var(--crit)}.iss.ok{border-left-color:var(--good)}.iss b{font-weight:600}.iss span{color:var(--ink2);font-size:13px}
+.stale{opacity:.5}
+.qtabs{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}.qtabs button{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 12px;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink2)}.qtabs button[aria-selected="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}.qtabs button[aria-selected="true"] .muted{color:inherit;opacity:.7}
+.ptbl tr.us td{background:var(--hover)}
+.bdg{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin-left:6px;border-radius:9px;font-size:11px;font-weight:700;color:#fff;vertical-align:1px}.bdg.crit{background:var(--crit)}.bdg.warn{background:var(--warn)}
+.bar .t{display:flex;justify-content:space-between;gap:12px;font-size:14px;margin-bottom:4px}
+.bar .t span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .track{height:8px;border-radius:4px;background:var(--hover)}
+.bar .fill{height:100%;border-radius:4px;background:var(--s1)}
+.row2{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:12px}
+@media(max-width:760px){.row2{grid-template-columns:minmax(0,1fr)}}
+.toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}
+.toolbar select{padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.log{list-style:none;margin:0;padding:0}
+.log li{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);font-size:14px}
+.log time{color:var(--muted);font-size:13px}
+.empty{color:var(--muted);text-align:center;padding:40px 0}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.on{opacity:1}
+/* 발굴 */
+.src{display:grid;gap:10px}
+.si{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;min-width:0}
+.si .top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.si .st{color:var(--warn);font-size:15px;letter-spacing:1px;flex:none}
+.si .nm{font-weight:600;min-width:0;overflow-wrap:anywhere;flex:1}
+.si .meta{font-size:12px;color:var(--muted)}
+.si .nums{display:flex;flex-wrap:wrap;gap:4px 18px;margin-top:8px;font-size:14px}
+.si .nums b{font-size:17px}
+.si .cat{font-size:12px;color:var(--ink2);margin-top:4px;overflow-wrap:anywhere}
+.si ul{list-style:none;margin:10px 0 0;padding:10px 0 0;border-top:1px solid var(--line);display:grid;gap:4px;font-size:13px}
+.si li{display:grid;grid-template-columns:16px minmax(0,1fr);gap:6px;color:var(--ink2)}
+.si li .y{color:var(--good)}.si li .n{color:var(--muted)}
+.si .links{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.tag{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:99px;background:var(--hover);color:var(--ink2)}
+.tag.ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.tag.lowc{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+</style>
+</head><body>
+
+<div class="wrap">
+ <section id="gate">
+  <form id="gateForm" autocomplete="off">
+   <h1>마마솔루션 재고</h1>
+   <input id="code" placeholder="코드네임" aria-label="코드네임" autocapitalize="off" spellcheck="false">
+   <button class="btn" type="submit" id="goBtn">들어가기</button>
+   <p id="gateErr" role="alert"></p>
+  </form>
+ </section>
+
+ <section id="app" hidden>
+  <header><h1>마마솔루션 재고</h1><span class="who" id="who"></span><button class="btn ghost sm" id="logout" type="button">나가기</button></header>
+  <nav role="tablist">
+   <button role="tab" data-tab="inv" aria-selected="true">재고</button>
+   <button role="tab" data-tab="online" aria-selected="false">온라인</button>
+   <button role="tab" data-tab="lowest" aria-selected="false">최저가<span class="bdg" id="bdgLow" hidden></span></button>
+   <button role="tab" data-tab="src" aria-selected="false">발굴</button>
+   <button role="tab" data-tab="mon" aria-selected="false">모니터</button>
+   <button role="tab" data-tab="sales" aria-selected="false">판매</button>
+   <button role="tab" data-tab="log" aria-selected="false">기록</button>
+  </nav>
+
+  <div data-panel="inv">
+   <div class="summary" id="summary"></div>
+   <div class="cards" id="cards"></div>
+   <details class="plan"><summary>계산 기준</summary>
+    <div class="planrow">
+     <label>매입가 (원)<input id="pCost" type="number" min="0" step="100"></label>
+     <label>며칠치 구매<input id="pCover" type="number" min="7" step="1"></label>
+     <label>목표 마진 (%)<input id="pMargin" type="number" min="0" max="80" step="1"></label>
+     <label>판매 기준<select id="pWin"><option value="3">최근 3개월</option><option value="6">최근 6개월</option><option value="12">최근 12개월</option></select></label>
+    </div>
+   </details>
+   <h2 class="section-t">월별 판매</h2>
+   <div class="legend" id="legend"></div>
+   <div class="chart"><canvas id="cSku" aria-label="맛별 월별 판매 수량"></canvas></div>
+  </div>
+
+  <div data-panel="online" hidden>
+   <div class="onbar"><div class="updated" id="onUpdated"></div><button class="btn ghost sm" id="refreshBtn" type="button">업데이트</button></div>
+   <div class="cards" id="onCards"></div>
+   <details class="plan" id="bmBox"><summary>경쟁사 가격 가져오기 버튼 설치</summary><div style="margin-top:10px;font-size:14px;display:grid;gap:8px">
+    <span>1. 아래 버튼을 Chrome <b>즐겨찾기 바</b>로 끌어다 놓으세요. (즐겨찾기 바가 안 보이면 Ctrl+Shift+B)</span>
+    <a id="bmLink" class="btn sm" style="width:max-content;text-decoration:none" href="#">경쟁사 가져오기</a>
+    <span>2. 네이버 가격비교 페이지(키즈데이 포도·사과·칼마디)를 열고 즐겨찾기 바의 <b>경쟁사 가져오기</b>를 누르면 끝이에요.</span>
+    <span class="muted" style="font-size:12px">끌어다 놓기가 안 되면: 즐겨찾기 추가 → 이름 '경쟁사 가져오기' → URL 칸에 아래 내용을 붙여넣기</span>
+    <textarea id="bmCode" readonly rows="3" style="width:100%;font:12px monospace;border:1px solid var(--line);border-radius:8px;padding:6px;background:var(--bg)"></textarea>
+   </div></details>
+   <details class="plan"><summary>가격 규칙</summary>
+    <div class="planrow">
+     <label>쿠폰 금액 (원)<input id="pCoupon" type="number" min="0" step="100"></label>
+     <label>최저가보다 싸게 (원)<input id="pUndercut" type="number" min="0" step="10"></label>
+     <label>최소 이익률 (%)<input id="pMinMargin" type="number" min="0" max="80" step="1"></label>
+    </div>
+   </details>
+  </div>
+
+  <div data-panel="lowest" hidden>
+   <div class="onbar"><div class="updated" id="lwUpdated"></div><button class="btn ghost sm" id="crawlBtn" type="button">업데이트</button></div>
+   <div id="lwIssues"></div>
+   <div class="lw" id="lwCards"></div>
+  </div>
+
+  <div data-panel="src" hidden>
+   <div class="onbar"><div class="updated" id="srcUpdated"></div><button class="btn ghost sm" id="srcReload" type="button">새로고침</button></div>
+   <div class="qtabs" id="srcFilter" role="tablist" aria-label="추천도" style="margin:0 0 12px"></div>
+   <div class="src" id="srcList"></div>
+   <p class="sub" style="margin-top:14px">경쟁도는 처음엔 검색결과로 추정한 값이에요(<span class="tag">추정</span>). 가격비교 페이지를 열고 즐겨찾기 바의 <b>경쟁사 가져오기</b>를 누르면 실제 판매처 가격으로 다시 계산돼요(<span class="tag ok">실제</span>). 버튼 설치는 온라인 탭 아래에 있어요.</p>
+  </div>
+
+  <div data-panel="mon" hidden>
+   <div class="onbar"><div class="updated" id="monUpdated"></div><button class="btn ghost sm" id="monReload" type="button">새로고침</button></div>
+   <div id="monIssues"></div>
+   <div class="cards mon2" id="monCards"></div>
+   <div class="card" style="margin-top:12px"><h2 class="section-t">최근 로그 <span class="muted" style="font-weight:400;font-size:12px">naver_price_monitor.log 끝부분 · 관리 프로그램이 1분마다 보냄</span></h2><pre class="mlog" id="monLog"></pre></div>
+   <div class="card" style="margin-top:12px"><h2 class="section-t">최근 요청</h2><ul class="log" id="monReqs"></ul></div>
+  </div>
+
+  <div data-panel="sales" hidden>
+   <div class="toolbar"><select id="year" aria-label="기간"></select></div>
+   <div class="kpis" id="kpis"></div>
+   <div class="row2">
+    <div class="card"><h2 class="section-t">월 매출</h2><div class="chart"><canvas id="cRev" aria-label="월 매출"></canvas></div></div>
+    <div class="card"><h2 class="section-t">많이 판 상품</h2><div class="bars" id="top"></div></div>
+   </div>
+   <div class="card" style="margin-top:12px"><h2 class="section-t">연도별 이익 <span style="font-weight:400;font-size:12px;color:var(--ink2)">베러데이 3종</span></h2><div class="twrap" id="profit"></div></div>
+  </div>
+
+  <div data-panel="log" hidden><ul class="log" id="log"></ul></div>
+ </section>
+</div>
+<div id="toast" role="status"></div>
+<div class="modal" id="confirm" hidden role="dialog" aria-modal="true" aria-labelledby="cfTitle"><div class="box">
+ <h3 id="cfTitle"></h3><div id="cfBody"></div>
+ <div class="act"><button class="btn ghost sm" id="cfNo" type="button">아니요</button><button class="btn sm" id="cfYes" type="button">예, 바꿀게요</button></div>
+</div></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const won=v=>'₩'+Math.round(v).toLocaleString('ko-KR'), num=v=>Math.round(v).toLocaleString('ko-KR');
+const man=v=>v>=1e8?(v/1e8).toFixed(1)+'억':v>=1e4?Math.round(v/1e4).toLocaleString('ko-KR')+'만':num(v);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}};
+function toast(t,ms=2200){const el=$('toast');el.textContent=t;el.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>el.classList.remove('on'),ms)}
+
+// 서버 호출: google.script.run을 Promise로
+const api=(fn,...args)=>new Promise((ok,no)=>google.script.run.withSuccessHandler(ok).withFailureHandler(e=>no(e))[fn](...args));
+const errMsg=e=>String(e&&e.message||e).replace(/^Error:\s*/,'');
+
+// 상태 — 전부 서버(구글시트)가 진실
+const S={who:null,D:null,stock:{},plan:{},log:[],online:null,hist:[],jobs:{},editing:null,busy:false};
+function apply(r){S.who=r.who;S.D=r.data;S.stock=r.stock;S.plan=r.plan;S.log=r.log;S.online=r.online;S.hist=r.hist||[];S.caps=r.caps||{};S.appUrl=r.appUrl||'';setBadge(r.lowBadge);render()}
+
+// ── 입장
+async function login(code,silent){$('goBtn').disabled=true;$('gateErr').textContent='';
+ try{const r=await api('load',code);store.set('kd-who',r.who);$('gate').hidden=true;$('app').hidden=false;$('who').textContent=r.who;apply(r)}
+ catch(e){store.set('kd-who',null);if(!silent){$('gateErr').textContent=errMsg(e);$('code').select()}}
+ finally{$('goBtn').disabled=false}}
+$('gateForm').addEventListener('submit',e=>{e.preventDefault();const c=$('code').value.trim().toLowerCase();if(c)login(c)});
+$('logout').onclick=()=>{store.set('kd-who',null);S.who=null;S.D=null;$('app').hidden=true;$('gate').hidden=false;$('code').value=''};
+
+// 다른 사람이 고친 내용 반영: 탭으로 돌아올 때와 2분마다
+async function refresh(){if(!S.who||S.busy||S.editing||Object.values(S.jobs).some(j=>j.phase==='wait'))return;try{apply(await api('load',S.who))}catch(e){}if(tab==='lowest')loadLow()}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
+setInterval(refresh,120000);
+
+// ── 탭
+let tab='inv';
+function goTab(t){tab=t;document.querySelectorAll('[role=tab]').forEach(x=>x.setAttribute('aria-selected',x.dataset.tab===t));
+ document.querySelectorAll('[data-panel]').forEach(p=>p.hidden=p.dataset.panel!==tab);render()}
+document.querySelectorAll('[role=tab]').forEach(b=>b.onclick=()=>goTab(b.dataset.tab));
+
+// ── 재고 계산
+const COL=['--s1','--s2','--s3'];
+function calc(s){const p=S.plan,st=S.stock[s.id]||{qty:0,at:new Date().toISOString()};const daily=s.rate[p.win]||s.rate[6]||0;
+ const days=Math.max(0,(Date.now()-new Date(st.at))/864e5);const est=Math.max(0,st.qty-daily*days);
+ const left=daily>0?Math.floor(est/daily):Infinity;const need=Math.max(0,Math.ceil(daily*(p.cover||90)-est));
+ const target=s.settleU*(1-(p.margin||0)/100)-S.D.shipPerUnit;const profit=p.cost?s.settleU-S.D.shipPerUnit-p.cost:null;
+ const lvl=est<1?'crit':left<=14?'crit':left<=30?'warn':'good';
+ const label=est<1?'품절':left===Infinity?'판매 없음':`${left}일 남음`;
+ return {st,est:Math.floor(est),daily,left,need,target,profit,lvl,label}}
+const md=d=>{const t=new Date(d);return `${t.getMonth()+1}/${t.getDate()}`};
+
+function renderInv(){const R=S.D.skus.map(s=>[s,calc(s)]);
+ const urgent=R.filter(([,c])=>c.lvl==='crit').map(([s])=>s.name);const tot=R.reduce((a,[,c])=>a+c.need,0);
+ $('summary').innerHTML=(urgent.length?`<span class="pill crit">⚠ 지금 채울 것 · ${urgent.join(', ')}</span>`:`<span class="pill good">✓ 급한 재고 없음</span>`)+
+  `<span class="big num">${S.plan.cover}일치 ${num(tot)}개${S.plan.cost?` · ${won(tot*S.plan.cost)}`:''}</span>`;
+ $('cards').innerHTML=R.map(([s,c],i)=>{const ed=S.editing===s.id;
+  return `<article class="card"><h2><i class="dot" style="background:var(${COL[i]})"></i>${s.name}<span style="margin-left:auto" class="pill ${c.lvl}">${c.label}</span></h2>
+  <div class="stock">${ed?`<input id="edit" type="number" min="0" value="${c.est}" aria-label="${s.name} 재고"><span>개</span><button class="btn sm" data-save="${s.id}">저장</button>`
+   :`<b class="num">${c.est}</b><span>개</span><button class="btn ghost sm" data-edit="${s.id}">수정</button>`}</div>
+  <div class="sub">실제 재고 · ${md(c.st.at)} ${esc(c.st.by)} 확인${c.left!==Infinity&&c.est>0?` · ${md(Date.now()+c.left*864e5)} 소진 예상`:''}${S.online?.skus?.[s.id]?` · 페이지 재고 ${num(S.online.skus[s.id].stock??0)}개`:''}</div>
+  <dl class="kv"><dt>추천 구매</dt><dd class="num">${num(c.need)}개</dd>
+   <dt>이 가격 이하면 사기</dt><dd class="num">${won(Math.max(0,c.target))}</dd>
+   <dt>월 판매</dt><dd class="num">${(c.daily*30.4).toFixed(1)}개</dd>
+   ${c.profit!=null?`<dt>개당 이익</dt><dd class="num">${won(c.profit)}</dd>`:''}</dl></article>`}).join('');
+ document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{S.editing=b.dataset.edit;renderInv();$('edit').focus();$('edit').select()});
+ document.querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>saveStock(b.dataset.save,+$('edit').value));
+ const ed=$('edit');if(ed)ed.onkeydown=e=>{if(e.key==='Enter')saveStock(S.editing,+ed.value);if(e.key==='Escape'){S.editing=null;renderInv()}};
+ const P=S.plan;[['pCost','cost'],['pCover','cover'],['pMargin','margin'],['pWin','win']].forEach(([id,k])=>{const el=$(id);if(document.activeElement!==el)el.value=P[k]??''});
+ renderSkuChart()}
+
+let chSku,chRev;
+function baseOpts(fmt){return {maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},
+ tooltip:{backgroundColor:css('--ink'),titleColor:css('--surface'),bodyColor:css('--surface'),padding:8,cornerRadius:6,boxPadding:4,usePointStyle:true}},
+ scales:{x:{grid:{display:false},border:{color:css('--line')},ticks:{color:css('--muted'),maxRotation:0,autoSkipPadding:14}},
+  y:{beginAtZero:true,border:{display:false},grid:{color:css('--line')},ticks:{color:css('--muted'),maxTicksLimit:4,callback:fmt}}}}}
+function renderSkuChart(){const n=18,labels=S.D.months.slice(-n).map(m=>m.slice(2).replace('-','.'));
+ $('legend').innerHTML=S.D.skus.map((s,i)=>`<span><i class="dot" style="background:var(${COL[i]})"></i>${s.name}</span>`).join('');
+ const ds=S.D.skus.map((s,i)=>({label:s.name,data:s.series.slice(-n),borderColor:css(COL[i]),backgroundColor:css(COL[i]),borderWidth:2,pointRadius:0,pointHoverRadius:5,tension:.3}));
+ if(chSku){chSku.data.labels=labels;chSku.data.datasets=ds;chSku.update('none');return}
+ const o=baseOpts(num);o.plugins.tooltip.callbacks={label:c=>` ${c.dataset.label} ${c.raw}개`};
+ chSku=new Chart($('cSku'),{type:'line',data:{labels,datasets:ds},options:o})}
+
+// ── 판매
+function renderSales(){const SA=S.D.sales,sel=$('year');
+ if(!sel.options.length){const ys=[...new Set(SA.months.map(m=>m.slice(0,4)))].sort().reverse();
+  sel.innerHTML='<option value="all">전체 기간</option>'+ys.map(y=>`<option value="${y}">${y}년</option>`).join('');sel.onchange=renderSales}
+ const y=sel.value,idx=SA.months.map((m,i)=>[m,i]).filter(([m])=>y==='all'||m.startsWith(y)).map(([,i])=>i);
+ const sum=k=>idx.reduce((a,i)=>a+SA[k][i],0);const all=sum('all');
+ const PF=SA.profit||{},pf=PF[y],pct=t=>t&&t.rev?(t.profit/t.rev*100).toFixed(1)+'%':'-';
+ $('kpis').innerHTML=[['매출',won(sum('rev'))],['판매 수량',num(sum('qty'))+'개'],['주문',num(sum('orders'))+'건'],['취소·반품',all?(sum('void')/all*100).toFixed(1)+'%':'-'],
+  ['순이익',pf?won(pf.profit):'-','베러데이 3종'],['평균 마진율',pct(pf),'순이익 ÷ 매출']]
+  .map(([l,v,sub])=>`<div class="card kpi"><div class="l">${l}</div><div class="v num">${v}</div>${sub?`<div class="s">${sub}</div>`:''}</div>`).join('');
+ const yrs=Object.keys(PF).filter(k=>k!=='all').sort().reverse();
+ $('profit').innerHTML=yrs.length?`<table class="ptbl"><thead><tr><th>기간</th><th>매출</th><th>매입원가</th><th>택배비</th><th>순이익</th><th>마진율</th></tr></thead><tbody>${
+  [...yrs,'all'].map(k=>{const t=PF[k],e=t.qty?Math.round(t.estQty/t.qty*100):0;return `<tr class="${k===y?'sel':''}"><td>${k==='all'?'전체':k+'년'}</td><td class="num">${won(t.rev)}</td><td class="num">${won(t.cost)}${e?`<span style="color:var(--ink2);font-size:11px"> (${e}% 추정)</span>`:''}</td><td class="num">${won(t.ship)}</td><td class="num">${won(t.profit)}</td><td class="num">${pct(t)}</td></tr>`}).join('')
+ }</tbody></table><p style="font-size:12px;color:var(--ink2);margin:8px 0 0">순이익 = 정산금(수수료 뺀 금액) − 매입원가 − 택배비. 매입 기록이 없는 기간은 원가를 추정했어요.</p>`:'<p class="empty">데이터 없음</p>';
+ const labels=idx.map(i=>y==='all'?SA.months[i].slice(2).replace('-','.'):(+SA.months[i].slice(5))+'월'),data=idx.map(i=>SA.rev[i]);
+ if(chRev){chRev.data.labels=labels;chRev.data.datasets[0].data=data;chRev.update('none')}
+ else{const o=baseOpts(man);o.plugins.tooltip.callbacks={label:c=>' '+won(c.raw)};
+  chRev=new Chart($('cRev'),{type:'bar',data:{labels,datasets:[{data,backgroundColor:css('--s1'),borderRadius:4,borderSkipped:'bottom',maxBarThickness:28}]},options:o})}
+ const top=SA.top[y]||[],mx=Math.max(...top.map(t=>t[1]),1);
+ $('top').innerHTML=top.length?top.map(([n,r])=>`<div class="bar"><div class="t"><span title="${esc(n)}">${esc(n)}</span><span class="num">${man(r)}</span></div><div class="track"><div class="fill" style="width:${r/mx*100}%"></div></div></div>`).join(''):'<p class="empty">판매 없음</p>'}
+
+// ── 기록
+function renderLog(){const L=S.log;
+ $('log').innerHTML=L.length?L.map(e=>{const t=new Date(e.at);
+  return `<li><span class="who">${esc(e.who)}</span><span>${esc(e.item)} <span class="num">${esc(e.from)} → ${esc(e.to)}</span></span><time>${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}</time></li>`}).join('')
+  :'<li class="empty" style="display:block">아직 수정 기록이 없어요</li>'}
+
+function render(){if(!S.D)return;if(tab==='inv')renderInv();else if(tab==='online')renderOnline();else if(tab==='lowest')S.low?renderLow():loadLow();else if(tab==='src')S.src?renderSrc():loadSrc();else if(tab==='mon')S.mon?renderMon():loadMon();else if(tab==='sales')renderSales();else renderLog()}
+
+// ── 발굴: 맘이베베 핫딜 -> 네이버 가격비교 -> 추천도 (sourcing/daemon.py)
+async function loadSrc(){if(!S.who||loadSrc.on)return;loadSrc.on=true;
+ try{S.src=await api('loadSourcing',S.who);if(tab==='src')renderSrc()}
+ catch(e){if(tab==='src')$('srcList').innerHTML=`<p class="empty">${esc(errMsg(e))}</p>`}finally{loadSrc.on=false}}
+S.srcMin=+(store.get('srcMin')||3);
+function renderSrc(){const X=S.src;if(!X)return;const st=X.status;
+ $('srcUpdated').innerHTML=st?`마지막 확인 ${ago(st.at)} · 다음 확인 ${st.nextAt?new Date(st.nextAt).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}):'-'}${st.error?` · <span style="color:var(--crit)">${esc(st.error)}</span>`:''}`:'발굴 프로그램 연락 없음';
+ const cnt=n=>X.items.filter(i=>i.stars>=n).length;
+ $('srcFilter').innerHTML=[5,4,3,1].map(n=>`<button role="tab" type="button" data-m="${n}" aria-selected="${S.srcMin===n}">${n===1?'전체':'★'+n+' 이상'} <span class="muted">${cnt(n)}</span></button>`).join('');
+ document.querySelectorAll('#srcFilter [data-m]').forEach(b=>b.onclick=()=>{S.srcMin=+b.dataset.m;store.set('srcMin',S.srcMin);renderSrc()});
+ const L=X.items.filter(i=>i.stars>=S.srcMin).sort((a,b)=>b.stars-a.stars||String(b.postedAt).localeCompare(String(a.postedAt))).slice(0,150);
+ const card=i=>{const pct=i.catPrice?Math.round((i.catPrice-(i.dealPriceNorm||i.dealPrice))/i.catPrice*100):null;
+  const comp=i.exact?`<span class="tag ok">실제</span> 근처 ${i.exact.near}곳 / ${i.exact.offers}곳`:`<span class="tag">추정</span> 근처 ${i.near??'-'}곳 / ${i.offers??'-'}곳`;
+  const q='https://search.shopping.naver.com/search/all?query='+encodeURIComponent(i.catTitle||i.name);
+  return `<article class="si"><div class="top"><span class="st" aria-label="추천도 ${i.stars}">${'★'.repeat(i.stars)}${'☆'.repeat(5-i.stars)}</span>
+   <span class="nm">${esc(i.name)}</span><span class="meta">${esc(i.mall||'')} · ${ago(i.postedAt)}</span></div>
+   <div class="nums num"><span>핫딜 <b>${num(i.dealPrice)}</b>원${i.dealPriceNorm&&i.dealPriceNorm!==i.dealPrice?` <span class="muted">(환산 ${num(i.dealPriceNorm)})</span>`:''}</span>
+    <span>최저가 <b>${i.catPrice?num(i.catPrice):'-'}</b>원${pct!=null?` <span class="${pct>0?'down':'up'}">${pct>0?pct+'% 쌈':Math.abs(pct)+'% 비쌈'}</span>`:''}</span>
+    <span>리뷰 ${num(i.reviews||0)}</span><span>${comp}</span></div>
+   <div class="cat">카탈로그: ${esc(i.catTitle||'')} ${i.matchConf&&i.matchConf!=='높음'?`<span class="tag lowc">매칭 ${esc(i.matchConf)}</span>`:''}</div>
+   <ul>${(i.rules||[]).map(r=>`<li><span class="${r.ok?'y':'n'}">${r.ok?'✔':r.ok===null?'–':'✘'}</span><span>${esc(r.rule)} <b>+${r.pts}</b> · ${esc(r.why)}</span></li>`).join('')}</ul>
+   <div class="links"><a class="plink" href="${esc(i.catLink)}" target="_blank" rel="noopener">가격비교 열기</a><a class="plink" href="${esc(q)}" target="_blank" rel="noopener">쇼핑 검색</a><a class="plink" href="${esc(i.articleUrl)}" target="_blank" rel="noopener">카페 글</a></div></article>`};
+ $('srcList').innerHTML=L.length?L.map(card).join(''):`<p class="empty">${X.items.length?'이 추천도 이상인 상품이 없어요':'아직 발굴한 상품이 없어요'}</p>`}
+$('srcReload').onclick=()=>{S.src=null;loadSrc()};
+setInterval(()=>{if(S.who&&tab==='src'&&!document.hidden)loadSrc()},120000);
+
+// ── 온라인: 페이지 상태·경쟁사·가격 맞추기
+const SKU_KO={grape:'포도',apple:'사과',calmadi:'칼마디'};
+// 네이버 통합검색에서 출발해 사용자가 직접 눌러 들어가게 한다 (가격비교 직접 링크는 차단되기 쉬움)
+const SKU_Q={grape:'베러데이 키즈데이 포도맛 1100mg 90캡슐',apple:'베러데이 키즈데이 사과맛 1100mg 90캡슐',calmadi:'베러데이 키즈데이 칼마디 1100mg 120캡슐'};
+const SKU_URL=Object.fromEntries(Object.entries(SKU_Q).map(([k,q])=>[k,'https://search.naver.com/search.naver?where=nexearch&query='+encodeURIComponent(q)]));
+const ST_KO={SALE:'판매중',OUTOFSTOCK:'품절',SUSPENSION:'판매중지',CLOSE:'판매종료'};
+const ago=d=>{const m=Math.round((Date.now()-new Date(d))/6e4);return m<1?'방금':m<60?`${m}분 전`:m<1440?`${Math.round(m/60)}시간 전`:`${Math.round(m/1440)}일 전`};
+const miniCharts={};
+function bookmarklet(){const code=`(async()=>{const W=t=>new Promise(r=>setTimeout(r,t));const all=new Map();
+const grab=()=>{[...document.querySelectorAll('[class*="product_info_area__"]')].forEach(e=>{const b=e.parentElement,m=e.querySelector('[class*="product_mall_info__"]');let n=m?(m.textContent||'').trim():'';if(!n&&m){const i=m.querySelector('img');n=i?i.alt:''}n=n.replace(/네이버페이.*$/,'').trim();const p=b.querySelector('[class*="product_num__"]'),t=e.querySelector('[class*="product_detail_info__"]');const x={mall:n,price:p?+p.textContent.replace(/[^0-9]/g,''):0,title:t?t.textContent.trim().slice(0,60):''};if(x.price)all.set(x.mall+'|'+x.price+'|'+x.title,x)})};
+const next=()=>{const f=document.querySelector('[class*="product_info_area__"]');if(!f)return null;let box=f;for(let k=0;k<8&&box;k++){box=box.parentElement;const b=box&&[...box.querySelectorAll('button')].find(z=>(z.textContent||'').includes('다음 페이지'));if(b)return b}return null};
+grab();for(let pg=0;pg<6;pg++){const b=next();if(!b||b.disabled||b.getAttribute('aria-disabled')==='true')break;const first=(document.querySelector('[class*="product_info_area__"]')||{}).textContent;b.click();for(let w=0;w<20;w++){await W(200);const f=(document.querySelector('[class*="product_info_area__"]')||{}).textContent;if(f&&f!==first)break}await W(300);const before=all.size;grab();if(all.size===before)break}
+const it=[...all.values()];if(!it.length){alert('판매처 목록을 찾지 못했어요. 네이버 가격비교 페이지에서 눌러 주세요.');return}
+window.open('${S.appUrl}?cap='+encodeURIComponent(JSON.stringify({who:'${S.who}',title:document.title,url:location.href.split('?')[0],items:it.slice(0,60)})),'_blank')})()`;
+ return 'javascript:'+encodeURIComponent(code)}
+function renderOnline(){const O=S.online,P=S.plan;
+ if(S.appUrl&&S.who){const bm=bookmarklet();$('bmLink').setAttribute('href',bm);$('bmCode').value=bm}
+ [['pCoupon','coupon'],['pUndercut','undercut'],['pMinMargin','minMargin']].forEach(([id,k])=>{const el=$(id);if(document.activeElement!==el)el.value=P[k]??''});
+ if(!O){$('onUpdated').textContent='';$('onCards').innerHTML='<p class="empty" style="grid-column:1/-1">아직 온라인 상태가 없어요. 가격 서버가 30분마다 채워요.</p>';return}
+ $('onUpdated').innerHTML=`${ago(O.at)} 업데이트${O.errors?.length?` · <span style="color:var(--warn)">${esc(O.errors.join(' / '))}</span>`:''}`;
+ $('onCards').innerHTML=S.D.skus.map((sk,i)=>{const o=O.skus?.[sk.id];if(!o)return `<article class="card"><h2>${sk.name}</h2><p class="empty">정보 없음</p></article>`;
+  const cap=S.caps?.[sk.id];const lastIn=[...S.hist].reverse().find(r=>r[1]===sk.id&&r[6]);
+  const comps=cap?cap.items.filter(x=>!x.mall.includes('마마솔루션')).map(x=>({mall:x.mall,price:x.price,at:cap.at})):(o.comps&&o.comps.length)?o.comps:(lastIn?[{mall:lastIn[5],price:+lastIn[6],at:lastIn[0]}]:[]);
+  const min=comps[0]?.price,first=min!=null&&(cap?.ours??o.couponPrice)<min;const j=S.jobs[sk.id]||{};
+  const ourShown=cap?.ours??o.couponPrice;
+  const rows=[...comps.map(c=>({m:c.mall,p:c.price})),{m:cap?.ours!=null?'우리 (가격비교 표시가)':'우리 (쿠폰가)',p:ourShown,us:1}].sort((a,b)=>a.p-b.p);
+  const li=(r,k)=>`<li class="${r.us?'us':''}"><span class="rk">${k+1}</span><span class="m">${esc(r.m)}</span><span class="num">${won(r.p)}</span></li>`;
+  const byPage={};(o.addons||[]).forEach(a=>(byPage[a.onSku]=byPage[a.onSku]||[]).push(won(a.price)));
+  return `<article class="card"><h2><i class="dot" style="background:var(${COL[i]})"></i>${sk.name}<a class="plink" href="${SKU_URL[sk.id]}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" title="네이버 검색 → 가격비교 눌러 이동">네이버 ↗</a><span style="margin-left:auto" class="pill ${min==null?'warn':first?'good':'crit'}">${min==null?'경쟁사 가격 필요':first?'최저가 1위':'최저가 아님'}</span></h2>
+   <div class="prices"><span>판매가 <b class="num">${won(o.price)}</b></span><span>쿠폰가 <b class="num">${won(o.couponPrice)}</b></span></div>
+   <div class="sub">${cap?.ours!=null?`가격비교 표시가 ${won(cap.ours)} (판매가에서 ${won(o.price-cap.ours)} 할인)`:`쿠폰 ${won(P.coupon||0)} 기준`} · 페이지 재고 ${num(o.stock??0)}개 · ${ST_KO[o.status]||esc(o.status)}</div>
+   ${Object.keys(byPage).length?`<div class="sub">추가상품 · ${Object.entries(byPage).map(([k,v])=>`${SKU_KO[k]} 페이지 ${v.join('·')}`).join(' / ')}</div>`:''}
+   ${comps[0]?.at?`<div class="sub" style="margin-top:10px">경쟁사 가격 · ${ago(comps[0].at)} ${cap?'가격비교 페이지에서 가져옴 ('+comps.length+'곳)':'직접 입력'}</div>`:''}
+   ${comps.length?`<ol class="comps">${rows.slice(0,6).map(li).join('')}</ol>${rows.length>6?`<details class="more"><summary class="sub" style="cursor:pointer;margin-top:6px">나머지 ${rows.length-6}곳 보기</summary><ol class="comps" style="border:0;padding-top:6px;margin-top:0">${rows.slice(6).map((r,k)=>li(r,k+6)).join('')}</ol></details>`:''}`:`<p class="sub" style="margin:12px 0 0;padding-top:12px;border-top:1px solid var(--line)">네이버 쇼핑에서 본 경쟁사 최저가를 아래에 넣으면 순위와 추이가 쌓여요.</p>`}
+   <div class="mini"><canvas id="mini-${sk.id}" aria-label="${sk.name} 가격 추이"></canvas></div>
+   ${jobView(sk.id,j)}</article>`}).join('');
+ document.querySelectorAll('[data-analyze]').forEach(b=>b.onclick=()=>analyze(b.dataset.analyze));
+ document.querySelectorAll('[data-apply]').forEach(b=>b.onclick=()=>askApply(b.dataset.apply));
+ document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>{delete S.jobs[b.dataset.cancel];renderOnline()});
+ S.D.skus.forEach((sk,i)=>drawMini(sk.id,i))}
+function prefill(id,k){const c=S.caps?.[id];if(!c||Date.now()-new Date(c.at)>6*3600e3)return '';const x=c.items.find(x=>!x.mall.includes('마마솔루션'));return x?x[k]:''}
+function jobView(id,j){
+ if(!j.phase)return `<div class="planrow" style="margin-top:14px;gap:8px"><label style="flex:1;min-width:120px">지금 경쟁사 최저가 (원)<input id="cp-${id}" type="number" min="0" step="10" inputmode="numeric" style="width:100%" value="${prefill(id,'price')}"></label><label style="flex:1;min-width:100px">판매처 (선택)<input id="cm-${id}" type="text" maxlength="30" style="width:100%" value="${esc(prefill(id,'mall'))}"></label></div><button class="btn go" data-analyze="${id}">가격 맞추기</button>`;
+ if(j.phase==='wait')return `<div class="prop"><span>${j.kind==='apply'?'가격을 바꾸는 중…':'경쟁사 가격 확인 중…'} <span class="muted">(1분쯤 걸려요)</span></span></div>`;
+ if(j.phase==='error')return `<div class="prop"><span style="color:var(--crit)">${esc(j.error)}</span><div class="act"><button class="btn ghost sm" data-cancel="${id}">닫기</button></div></div>`;
+ if(j.phase==='applied')return `<div class="prop">${(j.result.changed||[]).map(c=>`<span>✓ ${esc(c)}</span>`).join('')}${(j.result.check||[]).map(c=>`<span class="muted">${esc(c)}</span>`).join('')}<div class="act"><button class="btn ghost sm" data-cancel="${id}">닫기</button></div></div>`;
+ const p=j.result,ok=p.margin>=p.minMargin;
+ return `<div class="prop">
+  <div class="row"><span>경쟁사 최저</span><span class="num">${won(p.comp.price)} · ${esc(p.comp.mall)}</span></div>
+  <div class="row"><span>판매가</span><span class="num">${won(p.price)} → <b>${won(p.newPrice)}</b></span></div>
+  <div class="row"><span>쿠폰가</span><span class="num"><b>${won(p.couponPrice)}</b></span></div>
+  ${p.addons.map(a=>`<div class="row"><span>${({grape:'포도',apple:'사과',calmadi:'칼마디'})[a.onSku]} 페이지 추가상품</span><span class="num">${won(a.price)} → <b>${won(a.newPrice)}</b></span></div>`).join('')}
+  <div class="row"><span>개당 이익</span><span class="num"><b>${won(p.profit)}</b> · <span class="pill ${ok?'good':'crit'}">${p.margin}%</span></span></div>
+  ${p.notes.map(n=>`<span class="note">${esc(n)}</span>`).join('')}
+  <span class="muted" style="font-size:12px">수수료 ${(p.fee*100).toFixed(1)}% · 택배 ${won(p.ship)} · 매입가 ${won(p.cost)} 뺀 금액</span>
+  <div class="act"><button class="btn sm" data-apply="${id}" ${ok?'':'disabled'}>${ok?'적용':'이익률 '+p.minMargin+'% 미만'}</button><button class="btn ghost sm" data-cancel="${id}">취소</button></div></div>`}
+function drawMini(id,i){const rows=S.hist.filter(r=>r[1]===id);const el=$('mini-'+id);if(!el)return;miniCharts[id]?.destroy();
+ if(rows.length<2){el.parentElement.innerHTML='<p class="muted" style="font-size:12px;margin:0">가격 추이는 기록이 쌓이면 보여요</p>';return}
+ const labels=rows.map(r=>{const t=new Date(r[0]);return `${t.getMonth()+1}/${t.getDate()} ${t.getHours()}시`});
+ const o=baseOpts(v=>(v/1000).toFixed(1)+'천');o.scales.y.beginAtZero=false;o.scales.x.ticks.maxTicksLimit=4;o.plugins.tooltip.callbacks={label:c=>` ${c.dataset.label} ${won(c.raw)}`};
+ miniCharts[id]=new Chart(el,{type:'line',data:{labels,datasets:[
+  {label:'우리 쿠폰가',data:rows.map(r=>r[3]),borderColor:css(COL[i]),borderWidth:2,pointRadius:0,stepped:true},
+  {label:'경쟁사 최저',data:rows.map(r=>r[6]||null),borderColor:css('--muted'),borderWidth:1.5,pointRadius:0,stepped:true,spanGaps:true}]},options:o})}
+async function waitJob(id,reqId,kind){S.jobs[id]={phase:'wait',kind,reqId};renderOnline();const t0=Date.now();
+ while(Date.now()-t0<180000){await new Promise(r=>setTimeout(r,4000));
+  let r;try{r=await api('getRequest',S.who,reqId)}catch(e){continue}
+  if(r.status==='done'){S.jobs[id]=kind==='apply'?{phase:'applied',result:r.result}:{phase:'proposal',result:r.result,reqId};renderOnline();if(kind==='apply'){toast('가격을 바꿨어요');refresh()}return}
+  if(r.status==='error'){S.jobs[id]={phase:'error',error:r.result?.error||'실패했어요'};renderOnline();return}}
+ S.jobs[id]={phase:'error',error:'가격 서버가 응답하지 않아요. 잠시 후 다시 시도해 주세요'};renderOnline()}
+async function analyze(id){const price=+$('cp-'+id).value,mall=$('cm-'+id).value.trim();
+ if(!price)return toast('네이버 쇼핑에서 본 경쟁사 최저가를 입력해 주세요');
+ try{waitJob(id,await api('requestAnalyze',S.who,id,{price,mall}),'analyze')}catch(e){toast(errMsg(e))}}
+function askApply(id){const p=S.jobs[id]?.result;if(!p)return;
+ $('cfTitle').textContent=`${SKU_KO[id]} 가격을 이렇게 바꿀까요?`;
+ $('cfBody').innerHTML=`<div class="row"><span>판매가</span><span class="num">${won(p.price)} → <b>${won(p.newPrice)}</b></span></div>
+  <div class="row"><span>쿠폰가 (쿠폰 ${won(p.coupon)})</span><span class="num"><b>${won(p.couponPrice)}</b></span></div>
+  ${p.addons.map(a=>`<div class="row"><span>${SKU_KO[a.onSku]} 페이지 추가상품</span><span class="num">${won(a.price)} → <b>${won(a.newPrice)}</b></span></div>`).join('')}
+  <div class="row"><span>개당 이익</span><span class="num"><b>${won(p.profit)}</b> (${p.margin}%)</span></div>
+  <p class="muted" style="font-size:12px;margin:6px 0 0">경쟁사 최저 ${won(p.comp.price)} (${esc(p.comp.mall)}) 기준 · [예]를 누르면 스마트스토어에 바로 반영돼요.</p>`;
+ $('cfYes').textContent='예, 바꿀게요';$('confirm').hidden=false;$('cfNo').focus();
+ $('cfYes').onclick=()=>{$('confirm').hidden=true;applyPrice(id)};}
+$('cfNo').onclick=()=>{$('confirm').hidden=true};
+$('confirm').addEventListener('click',e=>{if(e.target.id==='confirm')$('confirm').hidden=true});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('confirm').hidden)$('confirm').hidden=true});
+// [업데이트]: 가격 서버가 지금 상태를 다시 읽어 오게 하고 끝나면 화면을 새로 불러온다
+let refreshing=false;
+$('refreshBtn').onclick=async()=>{if(refreshing)return;refreshing=true;const b=$('refreshBtn');b.disabled=true;b.textContent='업데이트 중… (1분쯤)';
+ try{const id=await api('requestRefresh',S.who);const t0=Date.now();
+  while(Date.now()-t0<180000){await new Promise(r=>setTimeout(r,4000));let r;try{r=await api('getRequest',S.who,id)}catch(e){continue}
+   if(r.status==='done'){apply(await api('load',S.who));toast('최신 상태로 바꿨어요');return}
+   if(r.status==='error'){toast(r.result?.error||'업데이트하지 못했어요');return}}
+  toast('가격 서버가 응답하지 않아요. 잠시 후 다시 눌러 주세요')}
+ catch(e){toast(errMsg(e))}finally{refreshing=false;b.disabled=false;b.textContent='업데이트'}};
+// ── 최저가: naver_price_monitor.py 가 시트 '최저가'에 쌓는 네이버쇼핑 최저가 목록
+const lowCharts={};
+async function loadLow(){if(!S.who||loadLow.on)return;loadLow.on=true;
+ try{S.low=await api('loadLowest',S.who);setBadge(S.low.issues);if(tab==='lowest')renderLow();if(S.low.busy&&!crawling)waitCrawl(S.low.busy)}
+ catch(e){if(tab==='lowest')$('lwIssues').innerHTML=issueBox([{level:'crit',title:'최저가 데이터를 불러오지 못했어요',detail:errMsg(e)+' · 잠시 뒤 자동으로 다시 불러와요'}])}finally{loadLow.on=false}}
+const hm=d=>{const t=new Date(d);return `${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`};
+function delta(p){if(p.price==null||p.prev==null||p.price===p.prev)return '<span class="muted">-</span>';const d=p.price-p.prev;
+ return `<span class="${d>0?'up':'down'}">${d>0?'▲':'▼'} ${num(Math.abs(d))}</span>`}
+// 문제 목록 (서버 issues_ 결과). crit = 빨강, warn = 주황
+function issueBox(list,more){if(!list||!list.length)return '';
+ return `<div class="issues" role="status">${list.map(x=>`<div class="iss ${x.level}"><b>${x.level==='crit'?'⚠':'!'} ${esc(x.title)}</b>${x.detail?`<span>${esc(x.detail)}</span>`:''}</div>`).join('')}${more?'<button class="linkbtn" type="button" data-go="mon">모니터 탭에서 자세히 보기 →</button>':''}</div>`}
+function setBadge(x){if(!x)return;const c=Array.isArray(x)?{crit:x.filter(i=>i.level==='crit').length,warn:x.filter(i=>i.level==='warn').length}:x;
+ const b=$('bdgLow'),n=c.crit||c.warn;b.hidden=!n;b.textContent=n||'';b.className='bdg '+(c.crit?'crit':'warn');b.title=c.crit?`심각 ${c.crit}건`:`주의 ${c.warn}건`}
+// 수량: 서버 값이 없으면(예전 기록) 상품명에서 크롤러와 같은 규칙으로 읽는다
+const qtyOf=t=>{t=String(t||'').replace(/\d[\d,.]*\s*(mg|캡슐|정|g|ml|포|일분|일치)(?![가-힣])/gi,' ');const p=t.match(/(?<!\d)(\d)\s*\+\s*(\d)(?!\d)/);if(p)return +p[1]+ +p[2];
+ const m=[...t.matchAll(/(?<![\d,.])(\d{1,2})\s*(개입|개|박스|통|병|팩|세트|set|box|입)(?![가-힣a-z])/gi)].pop();return m&&+m[1]>0&&+m[1]<=30?+m[1]:1};
+const mallOf=p=>p.mall||(p.sellers?`네이버 가격비교 (${p.sellers}곳)`:'(판매처 미표시)');
+const OURS='마마솔루션';S.lowQty={};
+function renderLow(){const L=S.low;if(!L)return;
+ const lastOk=L.queries.map(q=>q.at).filter(Boolean).sort().pop();
+ $('lwUpdated').innerHTML=(lastOk?`${ago(lastOk)} 성공 확인 · `:'')+(L.monOn?'모니터 켜짐 · 1시간마다 자동 확인':`<span style="color:var(--warn)">모니터 끊김${L.seen?` (${ago(L.seen)} 마지막 연결)`:''}</span>`);
+ $('lwIssues').innerHTML=issueBox(L.issues,true);
+ document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>goTab(b.dataset.go));
+ if(!L.queries.length){$('lwCards').innerHTML='<p class="empty">아직 최저가 기록이 없어요. 모니터가 첫 확인을 하면 보여요.</p>';return}
+ $('lwCards').innerHTML=L.queries.map((q,i)=>{const h=q.health||{level:'ok'};
+  const all=q.items.map(p=>({...p,qty:p.qty||qtyOf(p.title),rel:p.rel!==false}));
+  const it=all.filter(p=>p.rel),other=all.filter(p=>!p.rel);
+  // 1개 가격 중앙값으로 수량이 이상한 것(개당 가격이 너무 다름) 표시
+  const singles=it.filter(p=>p.qty===1&&p.price).map(p=>p.price).sort((a,b)=>a-b),base=singles[singles.length>>1];
+  it.forEach(p=>{p.unit=p.price?Math.round(p.price/p.qty):null;p.odd=!!(base&&p.unit&&(p.unit<base*.55||p.unit>base*1.6))});
+  const groups={};it.forEach(p=>(groups[p.qty]=groups[p.qty]||[]).push(p));
+  const qs=Object.keys(groups).map(Number).sort((a,b)=>a-b);
+  const sel=qs.includes(S.lowQty[q.query])?S.lowQty[q.query]:(qs.includes(1)?1:qs[0]);
+  const rows=(groups[sel]||[]).slice().sort((a,b)=>(a.price??1e12)-(b.price??1e12));
+  const one=(groups[1]||[]).filter(p=>p.price).sort((a,b)=>a.price-b.price)[0];
+  const unitBest=it.filter(p=>p.unit&&!p.odd).sort((a,b)=>a.unit-b.unit)[0];
+  const malls=new Set(it.map(p=>p.mall).filter(Boolean)).size;
+  const ch=it.filter(p=>p.price!=null&&p.prev!=null&&p.price!==p.prev).length;
+  const tr=(p,k)=>{const us=(p.mall||'').includes(OURS);return `<tr class="${k===0?'sel':''}${us?' us':''}"><td class="num">${k+1}</td><td class="t"><a href="${esc(p.link)}" target="_blank" rel="noreferrer noopener" title="${esc(p.title)}">${esc(mallOf(p))}</a>${us?' <span class="pill good" style="padding:0 6px;font-size:11px">우리</span>':''}</td><td class="num">${p.price!=null?won(p.price):'<span class="up" title="가격을 못 읽음">?</span>'}</td><td class="num">${p.unit!=null?won(p.unit):'-'}${p.odd?' <span class="up" title="개당 가격이 다른 1개 상품과 많이 달라요. 수량을 잘못 읽었거나 다른 구성일 수 있어요">?</span>':''}</td><td class="num">${delta(p)}</td><td class="num">${esc(p.ship||'-')}</td><td class="num">${p.rating!=null?`${p.rating.toFixed(2)} (${num(p.reviews||0)})`:'-'}</td></tr>`};
+  const head='<thead><tr><th>#</th><th style="text-align:left">판매처</th><th>가격</th><th>개당</th><th>변동</th><th>배송비</th><th>평점(리뷰)</th></tr></thead>';
+  const pill=h.level==='ok'?`<span style="margin-left:auto" class="pill">${q.prevAt?(ch?`변동 ${ch}건`:'변동 없음'):'첫 기록'}</span>`:`<span style="margin-left:auto" class="pill ${h.level}">${esc(h.title)}</span>`;
+  const failed=h.lastAttemptAt&&q.at!==h.lastAttemptAt&&h.fails>0,stale=h.level==='crit'?'stale':'';
+  return `<article class="card"><h2><i class="dot" style="background:var(${COL[i%3]})"></i>${esc(q.query)}<a class="plink" href="https://search.naver.com/search.naver?where=nexearch&query=${encodeURIComponent(q.query)}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer">네이버 ↗</a>${pill}</h2>
+   ${h.level!=='ok'?`<div class="iss ${h.level}" style="margin-top:12px"><b>${esc(h.title)}</b>${h.detail?`<span>${esc(h.detail)}</span>`:''}</div>`:''}
+   ${!it.length?'<p class="empty" style="padding:24px 0">성공한 확인 기록이 없어요</p>':`<div class="${stale}">
+   <div class="prices">${one?`<span>1개 최저 <b class="num">${won(one.price)}</b> <span class="muted">${esc(mallOf(one))}</span> ${delta(one)}</span>`:''}${unitBest?`<span>개당 최저 <b class="num">${won(unitBest.unit)}</b> <span class="muted">${esc(mallOf(unitBest))} · ${unitBest.qty}개</span></span>`:''}<span class="muted">판매처 ${malls}곳 · ${it.length}건</span></div>
+   <div class="sub">${failed?'<b style="color:var(--crit)">이전 가격</b> · ':''}마지막 성공 ${hm(q.at)}${failed?` · 마지막 시도 ${hm(h.lastAttemptAt)} 실패`:''}${q.prevAt?` · 변동은 ${hm(q.prevAt)} 대비`:''}</div></div>`}
+   <div class="mini"><canvas id="lw-${i}" aria-label="${esc(q.query)} 최저가 추이"></canvas></div>
+   ${it.length?`<div class="qtabs" role="tablist" aria-label="수량">${qs.map(n=>`<button role="tab" type="button" data-q="${i}" data-n="${n}" aria-selected="${n===sel}">${n}개 <span class="muted">${groups[n].length}</span></button>`).join('')}</div>
+   <div class="twrap ${stale}"><table class="ptbl">${head}<tbody>${rows.slice(0,10).map(tr).join('')}</tbody></table></div>
+   ${rows.length>10?`<details><summary class="sub" style="cursor:pointer;margin-top:8px">나머지 ${rows.length-10}곳 보기</summary><div class="twrap"><table class="ptbl"><tbody>${rows.slice(10).map((p,k)=>tr(p,k+10)).join('')}</tbody></table></div></details>`:''}
+   ${other.length?`<details><summary class="sub" style="cursor:pointer;margin-top:8px">검색어와 다른 상품 ${other.length}개 (비교에서 뺌)</summary><ul class="sub" style="margin:6px 0 0;padding-left:18px">${other.map(p=>`<li>${esc(mallOf(p))} · ${p.price!=null?won(p.price):'-'} · ${esc(p.title.slice(0,60))}</li>`).join('')}</ul></details>`:''}`:''}
+  </article>`}).join('');
+ document.querySelectorAll('.qtabs [data-n]').forEach(b=>b.onclick=()=>{S.lowQty[L.queries[+b.dataset.q].query]=+b.dataset.n;renderLow()});
+ L.queries.forEach((q,i)=>drawLow(q,i))}
+function drawLow(q,i){const el=$('lw-'+i);lowCharts[i]?.destroy();if(!el)return;const S2=q.series;
+ if(S2.filter(r=>!r[3]).length<2&&!S2.some(r=>r[3])){el.parentElement.innerHTML='<p class="muted" style="font-size:12px;margin:0">가격 추이는 기록이 쌓이면 보여요</p>';return}
+ let carry=null;const fail=S2.map(r=>{if(!r[3]){carry=r[1]??carry;return null}return carry});// 실패 표시는 그때까지의 마지막 가격 높이에
+ const o=baseOpts(v=>(v/1000).toFixed(1)+'천');o.scales.y.beginAtZero=false;o.scales.x.ticks.maxTicksLimit=5;
+ o.plugins.tooltip.callbacks={label:c=>c.dataset.fail?' 확인 실패':` ${c.dataset.label} ${won(c.raw)}`};
+ lowCharts[i]=new Chart(el,{type:'line',data:{labels:S2.map(r=>{const t=new Date(r[0]);return `${t.getMonth()+1}/${t.getDate()} ${t.getHours()}시`}),datasets:[
+  {label:'1개 최저가',data:S2.map(r=>r[1]),borderColor:css(COL[i%3]),borderWidth:2,pointRadius:0,stepped:true,spanGaps:true},
+  {label:'개당 최저가',data:S2.map(r=>r[2]),borderColor:css('--muted'),borderWidth:1.5,pointRadius:0,stepped:true,spanGaps:true},
+  {label:'확인 실패',fail:1,data:fail,showLine:false,pointStyle:'crossRot',pointRadius:6,pointBorderWidth:2,borderColor:css('--crit'),backgroundColor:css('--crit')}]},options:o})}
+// [업데이트]: 모니터가 지금 바로 다시 크롤링하게 하고 끝나면 새로 불러온다
+let crawling=false;
+async function waitCrawl(id){crawling=true;const b=$('crawlBtn');b.disabled=true;b.textContent='확인 중… (1분쯤)';
+ try{const t0=Date.now();
+  while(Date.now()-t0<300000){await new Promise(r=>setTimeout(r,5000));let r;try{r=await api('getRequest',S.who,id)}catch(e){continue}
+   if(r.status==='done'){S.low=null;await loadLow();r.result?.message?toast('확인했지만 '+r.result.message,7000):toast('최저가를 새로 확인했어요');return}
+   if(r.status==='error'){S.low=null;await loadLow();toast(r.result?.error||'확인하지 못했어요',7000);return}}
+  toast('모니터가 응답하지 않아요. PC에서 모니터가 켜져 있는지 확인해 주세요')}
+ finally{crawling=false;b.disabled=false;b.textContent='업데이트'}}
+$('crawlBtn').onclick=async()=>{if(crawling)return;try{waitCrawl(await api('requestCrawl',S.who))}catch(e){toast(errMsg(e))}};
+setInterval(()=>{if(S.who&&tab==='lowest'&&!document.hidden&&!crawling)loadLow()},60000);
+
+// ── 모니터: 최저가 모니터(naver_price_monitor.py)와 관리 프로그램(monitor_supervisor.py) 상태, 재시작/중지
+const MON_OK_MS=3*6e4; // 3분 넘게 연락이 없으면 끊김
+async function loadMon(){if(!S.who||loadMon.on)return;loadMon.on=true;
+ try{S.mon=await api('loadMonitor',S.who);if(tab==='mon')renderMon();if(S.mon.busy&&!monJob)waitMon(S.mon.busy)}
+ catch(e){if(tab==='mon')$('monCards').innerHTML=`<p class="empty">${esc(errMsg(e))}</p>`}finally{loadMon.on=false}}
+const fresh=t=>!!t&&Date.now()-new Date(t)<MON_OK_MS;
+const ACT_KO={restart:'재시작',stop:'중지',crawl:'최저가 업데이트'},RQ_KO={pending:'대기',running:'처리 중',done:'완료',error:'실패'};
+let monJob=null;
+function renderMon(){const M=S.mon;if(!M)return;const ms=M.monitor.status||{},ss=M.sup.status||{};
+ const monOn=fresh(M.monitor.seen),supOn=fresh(M.sup.seen),procOn=supOn&&ss.alive;
+ const pill=(ok,a,b)=>`<span style="margin-left:auto" class="pill ${ok?'good':'crit'}">${ok?a:b}</span>`;
+ $('monUpdated').textContent=`${hm(M.now)} 기준 · 30초마다 새로고침`;setBadge(M.issues);
+ $('monIssues').innerHTML='<h2 class="section-t">점검 결과</h2>'+(M.issues&&M.issues.length?issueBox(M.issues):'<div class="issues"><div class="iss ok"><b>✓ 문제 없음</b><span>모니터·관리 프로그램·검색어 확인이 모두 정상이에요</span></div></div>');
+ const busy=!!monJob,canAct=supOn&&!busy;
+ const hint=!supOn?'관리 프로그램과 연결이 끊겨 재시작할 수 없어요. PC가 꺼져 있거나 절전 중인지 확인해 주세요.'
+  :busy?`${ACT_KO[monJob.action]||'요청'} 처리 중… (관리 프로그램이 1분 안에 가져가요)`
+  :!monOn&&procOn?'프로세스는 있는데 웹사이트에 연락이 없어요(멈춤). 재시작해 보세요.'
+  :!monOn?'모니터가 꺼져 있어요. [시작]을 눌러 주세요.':'';
+ $('monCards').innerHTML=`<article class="card"><h2>최저가 모니터${pill(monOn,'정상','끊김')}</h2>
+   <dl class="kv"><dt>마지막 연락</dt><dd>${M.monitor.seen?ago(M.monitor.seen):'없음'}</dd>
+    <dt>마지막 확인</dt><dd>${M.lastCycle?`${hm(M.lastCycle)} (${ago(M.lastCycle)})`:'-'}</dd>
+    <dt>다음 정기 확인</dt><dd>${monOn&&ms.nextDueAt?hm(ms.nextDueAt):'-'}</dd>
+    <dt>켜진 시각</dt><dd>${ms.startedAt?hm(ms.startedAt):'-'}${ms.cycle?` · ${ms.cycle}회 확인`:''}</dd>
+    <dt>프로세스</dt><dd>${!supOn?'<span class="muted">알 수 없음</span>':ss.alive?`실행 중 (PID ${(ss.pids||[]).join(', ')})`:'<span style="color:var(--crit)">없음</span>'}</dd></dl>
+   ${(ms.errors||[]).length&&monOn?`<p class="sub" style="color:var(--warn)">${ms.errors.map(esc).join('<br>')}</p>`:''}
+   ${hint?`<p class="sub" style="color:var(--${busy?'ink2':'warn'})">${esc(hint)}</p>`:''}
+   <div class="mact"><button class="btn sm" id="monRestart" ${canAct?'':'disabled'}>${busy&&monJob.action==='restart'?'재시작 중…':procOn?'재시작':'시작'}</button>
+    <button class="btn ghost sm" id="monStop" ${canAct&&procOn?'':'disabled'}>${busy&&monJob.action==='stop'?'끄는 중…':'중지'}</button></div></article>
+  <article class="card"><h2>관리 프로그램 (PC)${pill(supOn,'연결됨','끊김')}</h2>
+   <dl class="kv"><dt>마지막 연락</dt><dd>${M.sup.seen?ago(M.sup.seen):'없음'}</dd><dt>PC</dt><dd>${esc(ss.host||'-')}</dd>
+    <dt>모니터 프로세스 시작</dt><dd>${ss.since?hm(ss.since):'-'}</dd></dl>
+   <p class="sub">작업 스케줄러가 1분마다 monitor_supervisor.py 를 실행해 상태를 보내고 [재시작]·[중지] 요청을 처리해요.${supOn?'':' 끊겼다면 PC를 켜 주세요.'}</p></article>`;
+ const lg=$('monLog');lg.textContent=supOn||ss.log?(ss.log||'(로그 없음)'):'(관리 프로그램 연결 전)';lg.scrollTop=lg.scrollHeight;
+ $('monReqs').innerHTML=M.requests.length?M.requests.map(r=>`<li><span class="who">${esc(r.by)}</span><span>${ACT_KO[r.action]||esc(r.action)} · <span class="${r.status==='error'?'up':''}">${RQ_KO[r.status]||esc(r.status)}</span>${r.message?` <span class="muted">${esc(r.message)}</span>`:''}</span><time>${hm(r.at)}</time></li>`).join('')
+  :'<li class="empty" style="display:block">요청 기록이 없어요</li>';
+ const rb=$('monRestart'),sb=$('monStop');
+ rb.onclick=()=>askMon('restart');sb.onclick=()=>askMon('stop')}
+function askMon(action){
+ $('cfTitle').textContent=action==='restart'?'최저가 모니터를 다시 켤까요?':'최저가 모니터를 끌까요?';
+ $('cfBody').innerHTML=`<p style="margin:0">${action==='restart'?'PC의 관리 프로그램이 1분 안에 모니터를 끄고 다시 켜요. 켜지면 바로 최저가를 한 번 확인해요.':'끄면 1시간마다 하는 확인과 [업데이트]가 멈춰요. 다시 쓰려면 [시작]을 눌러 주세요.'}</p>`;
+ $('cfYes').textContent=action==='restart'?'예, 재시작':'예, 끌게요';$('confirm').hidden=false;$('cfNo').focus();
+ $('cfYes').onclick=async()=>{$('confirm').hidden=true;
+  try{waitMon(await api('requestMonitor',S.who,action),action)}catch(e){toast(errMsg(e))}}}
+async function waitMon(id,action){monJob={id,action:action||S.mon?.requests?.find(r=>r.id===id)?.action||'restart'};renderMon();const t0=Date.now();
+ try{while(Date.now()-t0<180000){await new Promise(r=>setTimeout(r,5000));let r;try{r=await api('getRequest',S.who,id)}catch(e){continue}
+   if(r.status==='done'){toast(r.result?.message||'완료했어요');return}
+   if(r.status==='error'){toast(r.result?.error||'실패했어요');return}}
+  toast('관리 프로그램이 응답하지 않아요. PC가 켜져 있는지 확인해 주세요')}
+ finally{monJob=null;S.mon=null;await loadMon()}}
+$('monReload').onclick=()=>loadMon();
+setInterval(()=>{if(S.who&&tab==='mon'&&!document.hidden&&!monJob)loadMon()},30000);
+async function applyPrice(id){const j=S.jobs[id];if(!j?.reqId)return;try{waitJob(id,await api('requestApply',S.who,j.reqId),'apply')}catch(e){S.jobs[id]={phase:'error',error:errMsg(e)};renderOnline()}}
+
+// ── 저장
+async function saveStock(id,qty){if(!Number.isFinite(qty)||qty<0)return toast('재고 수량을 확인해 주세요');
+ const s=S.D.skus.find(x=>x.id===id);const shown=calc(s).est;S.editing=null;S.busy=true;
+ S.stock[id]={qty:Math.round(qty),at:new Date().toISOString(),by:S.who};renderInv();
+ try{apply(await api('saveStock',S.who,id,qty,shown));toast('저장했어요')}catch(e){toast(errMsg(e));refresh()}finally{S.busy=false}}
+[['pCost','cost'],['pCover','cover'],['pMargin','margin'],['pWin','win'],['pCoupon','coupon'],['pUndercut','undercut'],['pMinMargin','minMargin']].forEach(([id,k])=>$(id).addEventListener('change',async()=>{
+ const v=+$(id).value;if(!Number.isFinite(v)||v<0||S.plan[k]===v)return;S.plan[k]=v;render();S.busy=true;
+ try{apply(await api('savePlan',S.who,k,v));toast('저장했어요')}catch(e){toast(errMsg(e));refresh()}finally{S.busy=false}}));
+
+// ── 시작: 이 브라우저에서 들어온 적 있으면 자동 입장
+const saved=store.get('kd-who');if(saved)login(saved,true);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{chSku?.destroy();chRev?.destroy();chSku=chRev=null;render()});
+</script>
+</body></html>
