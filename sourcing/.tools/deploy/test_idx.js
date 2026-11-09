@@ -38,4 +38,17 @@ T.S.srcMin = 1; T.renderSrc();
 const all = els.srcList.innerHTML;
 ok(all.includes('크리넥스') && all.includes('매칭 낮음') && all.includes('실제</span> 근처 4곳'), '전체 보기: 매칭 낮음 태그, 실제 경쟁도 태그');
 ok(all.includes('47% 비쌈'), '최저가보다 비싸면 비쌈 표시');
+
+// 음식 자동 제외: 기본 목록에서 숨기고 '제외됨' 탭에서 보이며 [제외 해제] 버튼
+T.S.src.items.push({ articleId: '3', postedAt: now, mall: '', name: '한우 등심', dealPrice: 30000, dealPriceNorm: 30000, catTitle: '한우', catPrice: 50000, reviews: 900, near: 1, offers: 1,
+  matchConf: '높음', stars: 5, points: 6, rules: [], catLink: 'https://x/catalog/3', articleUrl: 'u', autoExclude: true, excluded: true, excludeWhy: "상품명 '한우' (정육)", category: '식품', manual: null });
+T.S.srcMin = 1; T.S.srcView = 'list'; T.renderSrc();
+ok(!els.srcList.innerHTML.includes('한우 등심') && els.srcList.innerHTML.includes('data-ex="exclude"'), '제외된 상품은 기본 목록에서 숨김 + 일반 카드에 [제외]');
+ok(els.srcFilter.innerHTML.includes('제외됨 <span class="muted">1'), '제외됨 탭 개수');
+ok(els.srcFilter.innerHTML.includes('전체 <span class="muted">2'), '추천도 개수는 제외 빼고');
+T.S.srcView = 'ex'; T.renderSrc();
+const ex = els.srcList.innerHTML;
+ok(ex.includes('한우 등심') && ex.includes('자동 제외') && ex.includes('정육') && ex.includes('data-ex="include"') && !ex.includes('빼빼로'), '제외됨 탭: 사유 + [제외 해제]');
+T.S.src.items[2].manual = { state: 'include', who: 'mk', at: now }; T.S.src.items[2].excluded = false; T.S.srcView = 'list'; T.renderSrc();
+ok(els.srcList.innerHTML.includes('한우 등심') && els.srcList.innerHTML.includes('제외 해제</span>mk') && els.srcList.innerHTML.includes('data-ex="auto"'), '해제한 상품은 목록에 + 해제 표시 + [자동으로]');
 process.exit(fail ? 1 : 0);

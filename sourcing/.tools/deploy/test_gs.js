@@ -64,4 +64,29 @@ h = cap({ who: 'zz', title: 'x', url: 'https://search.shopping.naver.com/catalog
 ok(h.includes('저장하지 못했어요'), '코드네임 틀리면 거부');
 let threw = false; try { run(`loadSourcing('zz')`); } catch (e) { threw = true; }
 ok(threw, 'loadSourcing 코드네임 확인');
+
+// 4) 음식 자동 제외 + 사람이 제외/해제 (발굴제외 시트, 작업기가 다시 보내도 유지)
+sheets['기록'] = new Sheet();
+post({ token: 'tok', op: 'sourcing', items: [{ ...item(4, '444', 4, 4), name: '한우 등심', autoExclude: true, excludeWhy: "상품명 '한우' (정육)", category: '식품' }] });
+L = run(`loadSourcing('mk')`);
+let m = L.items.find(i => i.nvMid === '444');
+ok(m.autoExclude === true && m.excluded === true && m.excludeWhy.includes('한우') && m.category === '식품', '자동 제외 표시');
+ok(L.items.find(i => i.nvMid === '111').excluded === false, '음식 아니면 제외 아님');
+r = run(`setSourcingExclude('mk', '444', '4', 'include')`);
+ok(r.ok && r.manual.state === 'include' && r.manual.who === 'mk', '제외 해제 저장');
+post({ token: 'tok', op: 'sourcing', items: [{ ...item(4, '444', 4, 4), name: '한우 등심', autoExclude: true, excludeWhy: 'x' }] });
+m = run(`loadSourcing('mk')`).items.find(i => i.nvMid === '444');
+ok(m.excluded === false && m.autoExclude === true, '작업기가 덮어써도 사람이 해제한 값 유지');
+run(`setSourcingExclude('mk', '111', '1', 'exclude')`);
+ok(run(`loadSourcing('mk')`).items.find(i => i.nvMid === '111').excluded === true, '직접 제외');
+run(`setSourcingExclude('mk', '444', '4', 'auto')`);
+m = run(`loadSourcing('mk')`).items.find(i => i.nvMid === '444');
+ok(m.excluded === true && m.manual === null, '자동으로 되돌리면 자동 판단(제외)');
+ok(sheets['발굴제외'].rows.length === 4 && sheets['기록'].rows.length === 3, '발굴제외 기록 3줄 + 수정 기록');
+threw = false; try { run(`setSourcingExclude('mk', '999', '9', 'exclude')`); } catch (e) { threw = /없는 상품/.test(e.message); }
+ok(threw, '발굴 목록에 없는 상품은 거부');
+threw = false; try { run(`setSourcingExclude('zz', '444', '4', 'exclude')`); } catch (e) { threw = true; }
+ok(threw, '코드네임 확인');
+threw = false; try { run(`setSourcingExclude('mk', '444', '4', 'drop')`); } catch (e) { threw = true; }
+ok(threw, '상태값 확인');
 process.exit(fail ? 1 : 0);

@@ -12,6 +12,7 @@ import sys
 import cafe
 import config
 import match
+import perish
 import score
 import shop
 import store
@@ -30,7 +31,8 @@ def process(c, art, deal):
     comp = match.competition(cat, prods)
     sc = score.score(deal_price, cat, comp, hist, m["conf"])
     res = {"status": "ok", "catalog": cat, "match": {k: m[k] for k in ("score", "conf", "cnt_deal", "cnt_cat", "qty_deal", "qty_cat", "unit")},
-           "deal_price_norm": deal_price, "competition": comp, "history": hist, **sc}
+           "deal_price_norm": deal_price, "competition": comp, "history": hist, **sc,
+           "exclude": perish.classify([deal["name"], cat["title"]], cat.get("cat"))}
     store.save_deal(c, art, deal, "ok", cat["nv_mid"], res)
     return res
 
@@ -42,6 +44,7 @@ def to_row(d):
     """store.deals 한 줄 -> 웹사이트 '발굴' 시트 한 줄"""
     res = json.loads(d["result"] or "{}")
     cat, comp, mm = res.get("catalog") or {}, res.get("competition") or {}, res.get("match") or {}
+    ex = res.get("exclude") or {}
     return {
         "articleId": d["article_id"], "postedAt": d["posted_at"], "subject": d["subject"], "mall": d["mall"],
         "name": d["name"], "dealPrice": d["deal_price"], "dealPriceNorm": res.get("deal_price_norm"),
@@ -53,7 +56,25 @@ def to_row(d):
         "histLow": (res.get("history") or {}).get("low"),
         "catLink": cat.get("link", ""), "articleUrl": ARTICLE_URL.format(cafe=config.CAFE_ID, aid=d["article_id"]),
         "checkedAt": d["checked_at"],
+        # 음식 자동 제외 (perish.py). 사람이 바꾼 값은 웹사이트 '발굴제외' 시트에 따로 있어서 여기서 덮어써도 남는다
+        "autoExclude": bool(ex.get("excluded")), "excludeWhy": ex.get("why", ""), "category": ex.get("category", ""),
     }
+
+
+def reclassify(c):
+    """이미 처리한 글의 음식 제외를 지금 규칙으로 다시 매기고, 바뀐 것만 다음 전송 때 다시 보낸다.
+    (예전 글은 카테고리 ID 를 저장하지 않아서 상품명 키워드로만 판단된다)"""
+    changed = 0
+    for d in c.execute("SELECT article_id, name, result FROM deals WHERE status='ok'").fetchall():
+        res = json.loads(d["result"] or "{}")
+        cat = res.get("catalog") or {}
+        ex = perish.classify([d["name"], cat.get("title", "")], cat.get("cat"))
+        if ex != res.get("exclude"):
+            res["exclude"] = ex
+            c.execute("UPDATE deals SET result=?, pushed=0 WHERE article_id=?", (json.dumps(res, ensure_ascii=False), d["article_id"]))
+            changed += 1
+    c.commit()
+    return changed
 
 
 def show(art, deal, r):
@@ -67,6 +88,9 @@ def show(art, deal, r):
           + (f" · 개수 환산 {mm['cnt_deal']}→{mm['cnt_cat']} = {r['deal_price_norm']:,}원" if mm["cnt_deal"] != mm["cnt_cat"] else ""))
     print(f"   경쟁 근사: 근처 {r['competition']['near']}곳 / 비교 {r['competition']['offers']}곳 · 가격 {r['competition']['prices']}")
     print(f"   추천도 {'★' * r['stars']}{'☆' * (5 - r['stars'])} ({r['points']}점)")
+    ex = r.get("exclude") or {}
+    if ex.get("excluded"):
+        print(f"   [자동 제외] {ex['why']}")
     for x in r["rules"]:
         mark = "✔" if x["ok"] else ("–" if x["ok"] is None else "✘")
         print(f"     {mark} {x['rule']} +{x['pts']}  {x['why']}")
@@ -76,9 +100,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="처리할 후보 글 수 (0=전부)")
     ap.add_argument("--recheck", type=int, action="append", default=[])
+    ap.add_argument("--reclassify", action="store_true", help="처리한 글 전부 음식 제외 규칙 다시 적용 (검색 안 함)")
     a = ap.parse_args()
 
     c = store.db()
+    if a.reclassify:
+        print(f"음식 제외 다시 매김: 바뀐 글 {reclassify(c)}건 (다음 전송 때 웹사이트에 반영)")
+        return
     arts, _ = cafe.fetch_list()
     done = 0
     for art in arts:

@@ -146,6 +146,9 @@ header,.summary{min-width:0}
 .tag{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:99px;background:var(--hover);color:var(--ink2)}
 .tag.ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
 .tag.lowc{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.si .exw{font-size:12px;color:var(--ink2);margin-top:6px;overflow-wrap:anywhere}
+.si .exw .tag{margin-right:4px}
+.si .links .exb{margin-left:auto;display:flex;gap:6px}
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
 </style>
 </head><body>
@@ -361,10 +364,22 @@ async function loadSrc(){if(!S.who||loadSrc.on)return;loadSrc.on=true;
 S.srcMin=+(store.get('srcMin')||3);
 function renderSrc(){const X=S.src;if(!X)return;const st=X.status;
  $('srcUpdated').innerHTML=st?`마지막 확인 ${ago(st.at)} · 다음 확인 ${st.nextAt?new Date(st.nextAt).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}):'-'}${st.error?` · <span style="color:var(--crit)">${esc(st.error)}</span>`:''}`:'발굴 프로그램 연락 없음';
- const cnt=n=>X.items.filter(i=>i.stars>=n).length;
- $('srcFilter').innerHTML=[5,4,3,1].map(n=>`<button role="tab" type="button" data-m="${n}" aria-selected="${S.srcMin===n}">${n===1?'전체':'★'+n+' 이상'} <span class="muted">${cnt(n)}</span></button>`).join('');
- document.querySelectorAll('#srcFilter [data-m]').forEach(b=>b.onclick=()=>{S.srcMin=+b.dataset.m;store.set('srcMin',S.srcMin);renderSrc()});
- const L=X.items.filter(i=>i.stars>=S.srcMin).sort((a,b)=>b.stars-a.stars||String(b.postedAt).localeCompare(String(a.postedAt))).slice(0,150);
+ // 음식(상하기 쉬움·보관 어려움)은 자동 제외 -> '제외됨' 에서 보고 [제외 해제]. 일반 목록에서 [제외] 도 가능
+ const keep=X.items.filter(i=>!i.excluded),gone=X.items.filter(i=>i.excluded),exView=S.srcView==='ex';
+ const cnt=n=>keep.filter(i=>i.stars>=n).length;
+ $('srcFilter').innerHTML=[5,4,3,1].map(n=>`<button role="tab" type="button" data-m="${n}" aria-selected="${!exView&&S.srcMin===n}">${n===1?'전체':'★'+n+' 이상'} <span class="muted">${cnt(n)}</span></button>`).join('')
+  +`<button role="tab" type="button" data-x="1" aria-selected="${exView}">제외됨 <span class="muted">${gone.length}</span></button>`;
+ document.querySelectorAll('#srcFilter [data-m]').forEach(b=>b.onclick=()=>{S.srcMin=+b.dataset.m;S.srcView='list';store.set('srcMin',S.srcMin);renderSrc()});
+ document.querySelectorAll('#srcFilter [data-x]').forEach(b=>b.onclick=()=>{S.srcView='ex';renderSrc()});
+ const L=(exView?gone.slice().sort((a,b)=>String(b.postedAt).localeCompare(String(a.postedAt)))
+  :keep.filter(i=>i.stars>=S.srcMin).sort((a,b)=>b.stars-a.stars||String(b.postedAt).localeCompare(String(a.postedAt)))).slice(0,150);
+ const exLine=i=>{const m=i.manual;
+  if(i.excluded)return `<div class="exw">${m?`<span class="tag lowc">직접 제외</span>${esc(m.who)} · ${ago(m.at)}${i.autoExclude?'':' (자동 판단은 통과)'}`
+   :`<span class="tag lowc">자동 제외</span>${esc(i.excludeWhy||'음식')}`}</div>`;
+  if(m&&m.state==='include')return `<div class="exw"><span class="tag ok">제외 해제</span>${esc(m.who)} · ${ago(m.at)}${i.autoExclude?` · 자동 판단: ${esc(i.excludeWhy)}`:''}</div>`;
+  return ''};
+ const exBtns=i=>`<span class="exb">${i.manual?`<button class="btn ghost sm" type="button" data-ex="auto" data-a="${esc(i.articleId)}" title="사람이 바꾼 값을 지우고 자동 판단으로">자동으로</button>`:''}`
+  +`<button class="btn ghost sm" type="button" data-ex="${i.excluded?'include':'exclude'}" data-a="${esc(i.articleId)}">${i.excluded?'제외 해제':'제외'}</button></span>`;
  const card=i=>{const pct=i.catPrice?Math.round((i.catPrice-(i.dealPriceNorm||i.dealPrice))/i.catPrice*100):null;
   const comp=i.exact?`<span class="tag ok">실제</span> 근처 ${i.exact.near}곳 / ${i.exact.offers}곳`:`<span class="tag">추정</span> 근처 ${i.near??'-'}곳 / ${i.offers??'-'}곳`;
   const q='https://search.shopping.naver.com/search/all?query='+encodeURIComponent(i.catTitle||i.name);
@@ -373,10 +388,19 @@ function renderSrc(){const X=S.src;if(!X)return;const st=X.status;
    <div class="nums num"><span>핫딜 <b>${num(i.dealPrice)}</b>원${i.dealPriceNorm&&i.dealPriceNorm!==i.dealPrice?` <span class="muted">(환산 ${num(i.dealPriceNorm)})</span>`:''}</span>
     <span>최저가 <b>${i.catPrice?num(i.catPrice):'-'}</b>원${pct!=null?` <span class="${pct>0?'down':'up'}">${pct>0?pct+'% 쌈':Math.abs(pct)+'% 비쌈'}</span>`:''}</span>
     <span>리뷰 ${num(i.reviews||0)}</span><span>${comp}</span></div>
-   <div class="cat">카탈로그: ${esc(i.catTitle||'')} ${i.matchConf&&i.matchConf!=='높음'?`<span class="tag lowc">매칭 ${esc(i.matchConf)}</span>`:''}</div>
+   <div class="cat">카탈로그: ${esc(i.catTitle||'')} ${i.matchConf&&i.matchConf!=='높음'?`<span class="tag lowc">매칭 ${esc(i.matchConf)}</span>`:''}${i.category?` · ${esc(i.category)}`:''}</div>${exLine(i)}
    <ul>${(i.rules||[]).map(r=>`<li><span class="${r.ok?'y':'n'}">${r.ok?'✔':r.ok===null?'–':'✘'}</span><span>${esc(r.rule)} <b>+${r.pts}</b> · ${esc(r.why)}</span></li>`).join('')}</ul>
-   <div class="links"><a class="plink" href="${esc(i.catLink)}" target="_blank" rel="noopener">가격비교 열기</a><a class="plink" href="${esc(q)}" target="_blank" rel="noopener">쇼핑 검색</a><a class="plink" href="${esc(i.articleUrl)}" target="_blank" rel="noopener">카페 글</a></div></article>`};
- $('srcList').innerHTML=L.length?L.map(card).join(''):`<p class="empty">${X.items.length?'이 추천도 이상인 상품이 없어요':'아직 발굴한 상품이 없어요'}</p>`}
+   <div class="links"><a class="plink" href="${esc(i.catLink)}" target="_blank" rel="noopener">가격비교 열기</a><a class="plink" href="${esc(q)}" target="_blank" rel="noopener">쇼핑 검색</a><a class="plink" href="${esc(i.articleUrl)}" target="_blank" rel="noopener">카페 글</a>${exBtns(i)}</div></article>`};
+ $('srcList').innerHTML=L.length?L.map(card).join(''):`<p class="empty">${exView?'제외된 상품이 없어요':X.items.length?'이 추천도 이상인 상품이 없어요':'아직 발굴한 상품이 없어요'}</p>`;
+ document.querySelectorAll('#srcList [data-ex]').forEach(b=>b.onclick=()=>setSrcEx(b.dataset.a,b.dataset.ex))}
+// 같은 카탈로그의 글은 함께 바뀐다 (서버도 카탈로그ID 기준으로 저장)
+async function setSrcEx(aid,state){const X=S.src,it=X&&X.items.find(i=>i.articleId===aid);if(!it)return;
+ const same=X.items.filter(i=>it.nvMid?i.nvMid===it.nvMid:i.articleId===aid),prev=same.map(i=>[i,i.manual,i.excluded]);
+ const put=m=>same.forEach(i=>{i.manual=m;i.excluded=m?m.state==='exclude':i.autoExclude});
+ put(state==='auto'?null:{state,who:S.who,at:new Date().toISOString()});renderSrc();
+ try{const r=await api('setSourcingExclude',S.who,it.nvMid,it.articleId,state);put(r.manual);renderSrc();
+  toast(state==='exclude'?'제외했어요 · 제외됨 탭에서 되돌릴 수 있어요':state==='include'?'제외를 해제했어요':'자동 판단으로 되돌렸어요')}
+ catch(e){prev.forEach(([i,m,x])=>{i.manual=m;i.excluded=x});renderSrc();toast(errMsg(e))}}
 $('srcReload').onclick=()=>{S.src=null;loadSrc()};
 setInterval(()=>{if(S.who&&tab==='src'&&!document.hidden)loadSrc()},120000);
 

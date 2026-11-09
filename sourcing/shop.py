@@ -62,6 +62,8 @@ def parse_products(html: str):
             "sellers": int(d.get("mallCount") or 0) if catalog else None,
             "reviews": int(d["totalReviewCount"]) if d.get("totalReviewCount") else 0,
             "rating": float(d["averageReviewScore"]) if d.get("averageReviewScore") else None,
+            # 카테고리 ID (대>중>소>세). 이름은 없어서 perish.py 가 data/categories.json 으로 찾는다
+            "cat": {k: str(d.get(f) or "") for k, f in (("l", "lCatId"), ("m", "mCatId"), ("s", "sCatId"), ("ss", "ssCatId"))},
             "link": (f"https://search.shopping.naver.com/catalog/{nv}" if catalog
                      else url.get("mobileUrl") or url.get("pcUrl") or ""),
         })

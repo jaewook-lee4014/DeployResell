@@ -750,10 +750,13 @@ function loadLowest(code) {
 // 화면에서는 그 값으로 경쟁 규칙을 다시 매긴다.
 const SRC_COLS = ['글번호', '작성시각', '쇼핑몰', '상품명', '핫딜가', '환산핫딜가', '상태', '카탈로그ID', '카탈로그명', '카탈로그최저가',
   '판매처수', '리뷰수', '근처판매처', '비교판매처', '1-2위차', '경쟁출처', '매칭', '점수', '별', '규칙(JSON)', '기록최저가',
-  '카탈로그링크', '글링크', '확인시각', '원제목'];
+  '카탈로그링크', '글링크', '확인시각', '원제목', '자동제외', '제외사유', '카테고리'];
 const SRC_KEYS = ['articleId', 'postedAt', 'mall', 'name', 'dealPrice', 'dealPriceNorm', 'status', 'nvMid', 'catTitle', 'catPrice',
   'sellers', 'reviews', 'near', 'offers', 'gap12', 'compSource', 'matchConf', 'points', 'stars', 'rules', 'histLow',
-  'catLink', 'articleUrl', 'checkedAt', 'subject'];
+  'catLink', 'articleUrl', 'checkedAt', 'subject', 'autoExclude', 'excludeWhy', 'category'];
+// 음식 자동 제외(sourcing/perish.py: 카테고리·상품명 키워드)를 사람이 바꾼 기록. 카탈로그ID 기준, 아래쪽(최신)이 이긴다.
+// 상태: exclude(직접 제외) / include(제외 해제) / auto(자동 판단으로 되돌림). '발굴' 시트는 작업기가 덮어써서 따로 둔다.
+const SRC_EX_COLS = ['시각', '카탈로그ID', '글번호', '상태', '누가', '상품명'];
 const SRC_EXACT_COLS = ['시각', '카탈로그ID', '가져온 사람', '근처판매처', '판매처수', '1-2위차', '최저가', '판매처 목록(JSON)', '페이지'];
 const SRC_RULE = { gapWon: 1000, gapPct: 1, max: 3, pts: 1 }; // sourcing/config.py RULES 의 compete_* 와 같게
 const SRC_STARS = [[5, 5], [4, 4], [3, 3], [2, 2], [0, 1]];
@@ -833,6 +836,7 @@ function loadSourcing(code) {
       exact[String(r[1])] = { at: iso_(r[0]), who: String(r[2]), near: Number(r[3]), offers: Number(r[4]), gap12: r[5] === '' ? null : Number(r[5]), low: Number(r[6]) };
     });
   }
+  const manual = srcManual_(ss);
   const items = [];
   let noCat = 0;
   if (sh && sh.getLastRow() > 1) {
@@ -855,10 +859,63 @@ function loadSourcing(code) {
         });
         it.stars = srcStars_(it.points);
       }
+      srcExclude_(it, manual[it.nvMid || ('a' + it.articleId)]);
       items.push(it);
     });
   }
   items.reverse();
   const st = PropertiesService.getScriptProperties().getProperty('srcStatus');
   return { items: items, noCatalog: noCat, status: st ? JSON.parse(st) : null, appUrl: ScriptApp.getService().getUrl() };
+}
+
+/** '발굴제외' 시트 -> { 카탈로그ID(없으면 'a'+글번호): {state, who, at} } (최신 기록만) */
+function srcManual_(ss) {
+  const out = {};
+  const sh = ss.getSheetByName('발굴제외');
+  if (sh && sh.getLastRow() > 1) {
+    sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues().forEach(function (r) {
+      const key = String(r[1]) || ('a' + String(r[2]));
+      if (r[3] === 'auto') delete out[key];
+      else out[key] = { state: String(r[3]), who: String(r[4]), at: iso_(r[0]) };
+    });
+  }
+  return out;
+}
+
+/** 최종 제외 여부: 사람이 정한 값 > 자동 판단 */
+function srcExclude_(it, m) {
+  it.autoExclude = it.autoExclude === true || String(it.autoExclude).toUpperCase() === 'TRUE';
+  it.excludeWhy = it.excludeWhy || '';
+  it.category = it.category || '';
+  it.manual = m || null;
+  it.excluded = m ? m.state === 'exclude' : it.autoExclude;
+}
+
+/** 발굴 탭 [제외] / [제외 해제] / [자동으로]. state: exclude | include | auto */
+function setSourcingExclude(code, nvMid, articleId, state) {
+  code = check_(code);
+  if (['exclude', 'include', 'auto'].indexOf(state) < 0) throw new Error('잘못된 요청이에요');
+  nvMid = String(nvMid || '').replace(/[^0-9]/g, '');
+  articleId = String(articleId || '').replace(/[^0-9]/g, '');
+  if (!nvMid && !articleId) throw new Error('상품을 찾지 못했어요');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = book_();
+    let name = '';
+    const src = ss.getSheetByName('발굴');
+    if (src && src.getLastRow() > 1) { // 이름은 기록용. 발굴 목록에 있는 상품만 받는다
+      const rows = src.getRange(2, 1, src.getLastRow() - 1, 9).getValues();
+      const hit = rows.filter(function (r) { return nvMid ? String(r[7]) === nvMid : String(r[0]) === articleId; }).pop();
+      if (hit) name = String(hit[8] || hit[3]);
+    }
+    if (!name) throw new Error('발굴 목록에 없는 상품이에요');
+    sheet_(ss, '발굴제외', SRC_EX_COLS).appendRow([new Date().toISOString(), nvMid, articleId, state, code, txt_(name)]);
+    const KO = { exclude: '제외', include: '제외 해제', auto: '자동 판단' };
+    if (ss.getSheetByName('기록')) log_(ss, code, '발굴 ' + name.slice(0, 40), '', KO[state]);
+    const m = srcManual_(ss)[nvMid || ('a' + articleId)] || null;
+    return { ok: true, manual: m };
+  } finally {
+    lock.releaseLock();
+  }
 }
