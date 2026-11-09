@@ -12,7 +12,7 @@ class Range {
 class Sheet {
   constructor() { this.rows = []; }
   getLastRow() { return this.rows.length; }
-  getRange(r, c, nr = 1, nc = 1) { return new Range(this, r, c, nr, nc); }
+  getRange(r, c, nr = 1, nc = 1) { if (typeof r === 'string') { const m = r.match(/^([A-Z])(\d+)$/); return new Range(this, +m[2], m[1].charCodeAt(0) - 64, 1, 1); } return new Range(this, r, c, nr, nc); }
   appendRow(r) { this.rows.push(r.slice()); }
   setFrozenRows() {}
 }
@@ -128,4 +128,18 @@ ok(threw, '이미지가 아니면 거부');
 threw = false; try { run(`saveSourcingShot('zz', '111', '1', 'catalog', '${small}')`); } catch (e) { threw = true; }
 ok(threw, '캡처 저장도 코드네임 확인');
 ok(post({ token: 'bad', op: 'shotPull' }).error === 'unauthorized', 'shotPull 토큰 확인');
+// 7) 온라인 경쟁사 자동 검색 저장 (op=onlineComps): 속성 저장 + 가격이력 추이 + load() 로 화면에
+sheets['상태'] = new Sheet(); sheets['상태'].rows = [[JSON.stringify({ skus: { grape: { price: 23500, couponPrice: 21500, stock: 8 } } })]];
+sheets['가격이력'] = new Sheet(); sheets['가격이력'].rows = [['시각']];
+const autoState = { at: '2026-11-09T12:00:00+09:00', errors: [], skus: {
+  grape: { comps: Array.from({ length: 12 }, (_, k) => ({ mall: '가게' + k, price: 23000 + k * 10, ship: k % 2 ? 3000 : 0, eff: 23000 + k * 10 + (k % 2 ? 3000 : 0), title: 'x' })), catalog: { id: '51929242376', low: 23480, sellers: 16 } },
+  apple: { comps: [], catalog: null }, bogus: { comps: [{ mall: 'x', eff: 1 }] } } };
+r = post({ token: 'tok', op: 'onlineComps', state: autoState });
+ok(r.ok && r.history === 1, 'onlineComps 저장 + 가격이력 1줄 (판매처 있는 맛만)');
+const au = JSON.parse(props.onlineAuto);
+ok(au.skus.grape.comps.length === 8 && au.skus.grape.comps[0].eff === 23000 && au.skus.grape.comps[1].eff === 23020 && !au.skus.bogus, '맛마다 배송비 포함 싼 순 8곳, 모르는 맛 무시');
+ok(props.onlineAuto.length < 9000, '스크립트 속성 9KB 한도 안');
+const hr = sheets['가격이력'].rows[1];
+ok(hr[1] === 'grape' && hr[2] === 23500 && hr[3] === 21500 && hr[5] === '가게0' && hr[6] === 23000 && String(hr[11]).includes('가격비교 최저 23480'), '가격이력: 우리 값 + 경쟁 1~3위 + 메모');
+ok(post({ token: 'bad', op: 'onlineComps', state: autoState }).error === 'unauthorized', 'onlineComps 토큰 확인');
 process.exit(fail ? 1 : 0);

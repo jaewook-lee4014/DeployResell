@@ -16,7 +16,7 @@ const ctx = { document, window: {}, localStorage: { getItem: () => null, setItem
   setInterval() {}, setTimeout() {}, clearTimeout() {}, Chart: stub(), google: { script: { run: stub() } }, location: stub(), matchMedia: () => ({ matches: false, addEventListener() {} }),
   console, Date, Math, JSON, encodeURIComponent, Object, String, Number, Array, Promise, isFinite, URLSearchParams, navigator: {} };
 vm.createContext(ctx);
-vm.runInContext(code + '\n;globalThis.__t={S,renderSrc,renderShots,set tab(v){tab=v},set shotIt(v){shotIt=v},set shotKind(v){shotKind=v}};', ctx);
+vm.runInContext(code + '\n;globalThis.__t={S,renderSrc,renderShots,renderOnline,prefill,set tab(v){tab=v},set shotIt(v){shotIt=v},set shotKind(v){shotKind=v}};', ctx);
 const T = ctx.__t;
 const now = new Date().toISOString();
 T.S.src = { status: { at: now, nextAt: now, error: '' }, noCatalog: 1, items: [
@@ -88,4 +88,30 @@ T.S.shots = { key: '222', post: { at: now, who: 'auto', err: '로그인이 필�
 T.shotKind = 'post'; T.renderShots();
 ok(els.shotBody.innerHTML.includes('자동 캡처를 못 했어요: 로그인이 필요한 글') && els.shotBody.innerHTML.includes('sh-drop on" data-kind="post"'), '자동 캡처 실패: 사유 + 직접 붙여넣기 칸');
 ok(els.shotBody.innerHTML.includes('다른 캡처로 바꾸기') && els.shotBody.innerHTML.includes('mk'), '이미 있는 가격비교 캡처: 누가 넣었는지 + 바꾸기');
+// 5) 온라인 탭: 자동 검색 경쟁사 vs 북마클릿 (더 최근 것), 숨은 최저가, 오래된 값
+const ago2 = h => new Date(Date.now() - h * 3600e3).toISOString();
+T.S.D = { skus: [{ id: 'grape', name: '포도' }, { id: 'apple', name: '사과' }, { id: 'calmadi', name: '칼마디' }] };
+T.S.plan = { coupon: 2000 }; T.S.hist = []; T.S.jobs = {}; T.S.appUrl = ''; T.S.who = 'mk';
+T.S.online = { at: now, errors: [], skus: {
+  grape: { price: 23500, couponPrice: 21500, stock: 8, status: 'SALE', comps: [], addons: [] },
+  apple: { price: 22000, couponPrice: 20000, stock: 0, status: 'OUTOFSTOCK', comps: [], addons: [] },
+  calmadi: { price: 28000, couponPrice: 26000, stock: 6, status: 'SALE', comps: [], addons: [] } } };
+T.S.auto = { at: ago2(0.2), skus: {
+  grape: { comps: [{ mall: '써클홀딩스', price: 23490, ship: 0, eff: 23490 }, { mall: '쿠팡', price: 23600, ship: 0, eff: 23600 }], catalog: { id: '1', low: 23480, sellers: 16 } },
+  apple: { comps: [{ mall: 'G마켓', price: 22890, ship: 0, eff: 22890 }], catalog: { id: '2', low: 22890, sellers: 12 } },
+  calmadi: { comps: [{ mall: '쿠팡', price: 23730, ship: 0, eff: 23730 }, { mall: '권혁유통', price: 21500, ship: 3000, eff: 24500 }], catalog: { id: '3', low: 22000, sellers: 4 } } } };
+T.S.caps = { apple: { at: ago2(0.1), who: 'jo', ours: 21900, items: [{ mall: '템스윈공식몰', price: 22500 }, { mall: '마마솔루션', price: 21900 }] },
+  calmadi: { at: ago2(30), who: 'jo', ours: 26500, items: [{ mall: 'GAJU SHOP', price: 26200 }] } };
+T.renderOnline();
+const on = els.onCards.innerHTML, card = id => on.split('<article class="card">')[['grape', 'apple', 'calmadi'].indexOf(id) + 1] || '';
+ok(card('grape').includes('자동 검색 (2곳 · 가격비교 최저 ₩23,480, 판매처 16곳) · 배송비 포함') && card('grape').includes('써클홀딩스'), '포도: 자동 검색 경쟁사 + 가격비교 최저·판매처 수');
+ok(card('grape').includes('가격비교 최저 (판매처 미확인)') && card('grape').includes('₩23,480'), '포도: 목록보다 싼 가격비교 최저가는 따로 한 줄');
+ok(card('grape').includes('최저가 1위'), '포도: 우리 쿠폰가 21,500 < 23,480 이면 1위');
+ok(card('apple').includes('가격비교 페이지에서 가져옴') && card('apple').includes('템스윈공식몰') && !card('apple').includes('미확인'), '사과: 북마클릿이 더 최근이면 북마클릿 값');
+ok(card('calmadi').includes('자동 검색') && !card('calmadi').includes('GAJU') && card('calmadi').includes('권혁유통 · 배송 3,000 포함') && card('calmadi').includes('₩24,500'), '칼마디: 오래된 북마클릿 대신 자동 검색, 배송비 포함 가격');
+ok(T.prefill('grape', 'price') === 23490 && T.prefill('grape', 'mall') === '써클홀딩스' && T.prefill('apple', 'mall') === '템스윈공식몰', '[가격 맞추기] 미리 채우기: 더 최근 값의 1위');
+T.S.auto.at = ago2(3); T.S.caps = {}; T.renderOnline();
+ok(els.onCards.innerHTML.includes('오래된 값이에요') && T.prefill('grape', 'price') === 23490, '3시간 지난 자동 값: 오래됨 표시 (6시간까지는 미리 채움)');
+T.S.auto = null; T.renderOnline();
+ok(els.onCards.innerHTML.includes('경쟁사 가격 필요'), '자동 값도 없으면 예전처럼 경쟁사 가격 필요');
 process.exit(fail ? 1 : 0);

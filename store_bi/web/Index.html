@@ -302,7 +302,7 @@ const errMsg=e=>String(e&&e.message||e).replace(/^Error:\s*/,'');
 
 // 상태 — 전부 서버(구글시트)가 진실
 const S={who:null,D:null,stock:{},plan:{},log:[],online:null,hist:[],jobs:{},editing:null,busy:false};
-function apply(r){S.who=r.who;S.D=r.data;S.stock=r.stock;S.plan=r.plan;S.log=r.log;S.online=r.online;S.hist=r.hist||[];S.caps=r.caps||{};S.appUrl=r.appUrl||'';setBadge(r.lowBadge);render()}
+function apply(r){S.who=r.who;S.D=r.data;S.stock=r.stock;S.plan=r.plan;S.log=r.log;S.online=r.online;S.hist=r.hist||[];S.caps=r.caps||{};S.auto=r.auto||null;S.appUrl=r.appUrl||'';setBadge(r.lowBadge);render()}
 
 // ── 입장
 async function login(code,silent){$('goBtn').disabled=true;$('gateErr').textContent='';
@@ -537,18 +537,26 @@ function renderOnline(){const O=S.online,P=S.plan;
  if(!O){$('onUpdated').textContent='';$('onCards').innerHTML='<p class="empty" style="grid-column:1/-1">아직 온라인 상태가 없어요. 가격 서버가 30분마다 채워요.</p>';return}
  $('onUpdated').innerHTML=`${ago(O.at)} 업데이트${O.errors?.length?` · <span style="color:var(--warn)">${esc(O.errors.join(' / '))}</span>`:''}`;
  $('onCards').innerHTML=S.D.skus.map((sk,i)=>{const o=O.skus?.[sk.id];if(!o)return `<article class="card"><h2>${sk.name}</h2><p class="empty">정보 없음</p></article>`;
-  const cap=S.caps?.[sk.id];const lastIn=[...S.hist].reverse().find(r=>r[1]===sk.id&&r[6]);
-  const comps=cap?cap.items.filter(x=>!x.mall.includes('마마솔루션')).map(x=>({mall:x.mall,price:x.price,at:cap.at})):(o.comps&&o.comps.length)?o.comps:(lastIn?[{mall:lastIn[5],price:+lastIn[6],at:lastIn[0]}]:[]);
-  const min=comps[0]?.price,first=min!=null&&(cap?.ours??o.couponPrice)<min;const j=S.jobs[sk.id]||{};
-  const ourShown=cap?.ours??o.couponPrice;
-  const rows=[...comps.map(c=>({m:c.mall,p:c.price})),{m:cap?.ours!=null?'우리 (가격비교 표시가)':'우리 (쿠폰가)',p:ourShown,us:1}].sort((a,b)=>a.p-b.p);
+  // 경쟁사 가격: 북마클릿(가격비교 페이지 실제값)과 자동 검색(sourcing/online.py, 30분마다) 중 더 최근 것 -> 작업기 -> 직접 입력
+  const cap=S.caps?.[sk.id],au=onlineAuto(sk.id);const lastIn=[...S.hist].reverse().find(r=>r[1]===sk.id&&r[6]);
+  const useCap=cap&&(!au||new Date(cap.at)>=new Date(au.at)),src=useCap?'cap':au?'auto':(o.comps&&o.comps.length)?'worker':lastIn?'manual':'';
+  const comps=src==='cap'?cap.items.filter(x=>!x.mall.includes('마마솔루션')).map(x=>({mall:x.mall,price:x.price,at:cap.at}))
+   :src==='auto'?au.comps.map(x=>({mall:x.mall,price:x.eff,ship:x.ship,at:au.at})):src==='worker'?o.comps:src==='manual'?[{mall:lastIn[5],price:+lastIn[6],at:lastIn[0]}]:[];
+  const ourShown=useCap&&cap.ours!=null?cap.ours:o.couponPrice;
+  // 검색 결과에 안 나온 판매처가 더 쌀 수 있다: 가격비교 최저가가 목록보다 낮고 우리 값도 아니면 따로 한 줄
+  const hid=src==='auto'&&au.catalog&&au.catalog.low<(comps[0]?.price??Infinity)&&au.catalog.low!==o.price&&au.catalog.low!==ourShown?au.catalog.low:null;
+  const min=Math.min(comps[0]?.price??Infinity,hid??Infinity),first=isFinite(min)&&ourShown<min;const j=S.jobs[sk.id]||{};
+  const rows=[...comps.map(c=>({m:c.mall+(c.ship?` · 배송 ${num(c.ship)} 포함`:''),p:c.price})),...(hid?[{m:'가격비교 최저 (판매처 미확인)',p:hid}]:[]),
+   {m:useCap&&cap.ours!=null?'우리 (가격비교 표시가)':'우리 (쿠폰가)',p:ourShown,us:1}].sort((a,b)=>a.p-b.p);
   const li=(r,k)=>`<li class="${r.us?'us':''}"><span class="rk">${k+1}</span><span class="m">${esc(r.m)}</span><span class="num">${won(r.p)}</span></li>`;
+  const old=comps[0]?.at&&Date.now()-new Date(comps[0].at)>2*3600e3;
+  const srcTxt=src==='cap'?'가격비교 페이지에서 가져옴 ('+comps.length+'곳)':src==='auto'?`자동 검색 (${comps.length}곳${au.catalog?` · 가격비교 최저 ${won(au.catalog.low)}, 판매처 ${au.catalog.sellers}곳`:''}) · 배송비 포함`:src==='worker'?'가격 서버':'직접 입력';
   const byPage={};(o.addons||[]).forEach(a=>(byPage[a.onSku]=byPage[a.onSku]||[]).push(won(a.price)));
-  return `<article class="card"><h2><i class="dot" style="background:var(${COL[i]})"></i>${sk.name}<a class="plink" href="${SKU_URL[sk.id]}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" title="네이버 검색 → 가격비교 눌러 이동">네이버 ↗</a><span style="margin-left:auto" class="pill ${min==null?'warn':first?'good':'crit'}">${min==null?'경쟁사 가격 필요':first?'최저가 1위':'최저가 아님'}</span></h2>
+  return `<article class="card"><h2><i class="dot" style="background:var(${COL[i]})"></i>${sk.name}<a class="plink" href="${SKU_URL[sk.id]}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" title="네이버 검색 → 가격비교 눌러 이동">네이버 ↗</a><span style="margin-left:auto" class="pill ${!isFinite(min)?'warn':first?'good':'crit'}">${!isFinite(min)?'경쟁사 가격 필요':first?'최저가 1위':'최저가 아님'}</span></h2>
    <div class="prices"><span>판매가 <b class="num">${won(o.price)}</b></span><span>쿠폰가 <b class="num">${won(o.couponPrice)}</b></span></div>
    <div class="sub">${cap?.ours!=null?`가격비교 표시가 ${won(cap.ours)} (판매가에서 ${won(o.price-cap.ours)} 할인)`:`쿠폰 ${won(P.coupon||0)} 기준`} · 페이지 재고 ${num(o.stock??0)}개 · ${ST_KO[o.status]||esc(o.status)}</div>
    ${Object.keys(byPage).length?`<div class="sub">추가상품 · ${Object.entries(byPage).map(([k,v])=>`${SKU_KO[k]} 페이지 ${v.join('·')}`).join(' / ')}</div>`:''}
-   ${comps[0]?.at?`<div class="sub" style="margin-top:10px">경쟁사 가격 · ${ago(comps[0].at)} ${cap?'가격비교 페이지에서 가져옴 ('+comps.length+'곳)':'직접 입력'}</div>`:''}
+   ${comps[0]?.at?`<div class="sub" style="margin-top:10px${old?';color:var(--warn)':''}">경쟁사 가격 · ${ago(comps[0].at)} ${srcTxt}${old?' · 오래된 값이에요':''}</div>`:''}
    ${comps.length?`<ol class="comps">${rows.slice(0,6).map(li).join('')}</ol>${rows.length>6?`<details class="more"><summary class="sub" style="cursor:pointer;margin-top:6px">나머지 ${rows.length-6}곳 보기</summary><ol class="comps" style="border:0;padding-top:6px;margin-top:0">${rows.slice(6).map((r,k)=>li(r,k+6)).join('')}</ol></details>`:''}`:`<p class="sub" style="margin:12px 0 0;padding-top:12px;border-top:1px solid var(--line)">네이버 쇼핑에서 본 경쟁사 최저가를 아래에 넣으면 순위와 추이가 쌓여요.</p>`}
    <div class="mini"><canvas id="mini-${sk.id}" aria-label="${sk.name} 가격 추이"></canvas></div>
    ${jobView(sk.id,j)}</article>`}).join('');
@@ -556,7 +564,14 @@ function renderOnline(){const O=S.online,P=S.plan;
  document.querySelectorAll('[data-apply]').forEach(b=>b.onclick=()=>askApply(b.dataset.apply));
  document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>{delete S.jobs[b.dataset.cancel];renderOnline()});
  S.D.skus.forEach((sk,i)=>drawMini(sk.id,i))}
-function prefill(id,k){const c=S.caps?.[id];if(!c||Date.now()-new Date(c.at)>6*3600e3)return '';const x=c.items.find(x=>!x.mall.includes('마마솔루션'));return x?x[k]:''}
+// 자동 검색 경쟁사 (맛별). 판매처가 하나도 없으면 없는 것으로
+function onlineAuto(id){const a=S.auto,s=a&&a.skus&&a.skus[id];return s&&s.comps&&s.comps.length?Object.assign({at:a.at},s):null}
+// [가격 맞추기] 칸 미리 채우기: 6시간 안의 북마클릿 값과 자동 검색 값 중 더 최근 것의 1위
+function prefill(id,k){const fresh=t=>t&&Date.now()-new Date(t)<6*3600e3;
+ const c=S.caps?.[id],a=onlineAuto(id),useCap=fresh(c&&c.at)&&(!fresh(a&&a.at)||new Date(c.at)>=new Date(a.at));
+ if(useCap){const x=c.items.find(x=>!x.mall.includes('마마솔루션'));return x?x[k]:''}
+ if(fresh(a&&a.at)){const x=a.comps[0];return k==='price'?x.eff:x.mall}
+ return ''}
 function jobView(id,j){
  if(!j.phase)return `<div class="planrow" style="margin-top:14px;gap:8px"><label style="flex:1;min-width:120px">지금 경쟁사 최저가 (원)<input id="cp-${id}" type="number" min="0" step="10" inputmode="numeric" style="width:100%" value="${prefill(id,'price')}"></label><label style="flex:1;min-width:100px">판매처 (선택)<input id="cm-${id}" type="text" maxlength="30" style="width:100%" value="${esc(prefill(id,'mall'))}"></label></div><button class="btn go" data-analyze="${id}">가격 맞추기</button>`;
  if(j.phase==='wait')return `<div class="prop"><span>${j.kind==='apply'?'가격을 바꾸는 중…':'경쟁사 가격 확인 중…'} <span class="muted">(1분쯤 걸려요)</span></span></div>`;

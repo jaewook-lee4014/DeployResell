@@ -153,6 +153,7 @@ function load(code) {
     online: json_(ss.getSheetByName('상태').getRange('A1')),
     hist: hist,
     caps: captures_(ss),
+    auto: onlineAuto_(),
     lowBadge: lowestBadge_(ss),
     appUrl: ScriptApp.getService().getUrl(),
   };
@@ -316,6 +317,7 @@ function doPost(e) {
     if (body.op === 'lowest') return out_(saveLowest_(ss, body.cycles));
     if (body.op === 'sourcing') return out_(saveSourcing_(ss, body.items || [], body.status));
     if (body.op === 'shotPull') return out_(shotPull_(ss));
+    if (body.op === 'onlineComps') return out_(saveOnlineComps_(ss, body.state));
     if (body.op === 'shot') return out_(workerShot_(ss, body));
     return out_({ ok: false, error: 'unknown op' });
   } catch (err) {
@@ -1035,4 +1037,51 @@ function saveSourcingShot(code, nvMid, articleId, kind, dataUrl) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ── 온라인 탭 경쟁사: 자동 검색 (sourcing/online.py) ───────────────
+// VM 작업기는 검색 API 키가 없어 경쟁사를 못 채운다. 이 PC 의 발굴 루프가 30분마다 네이버쇼핑 모바일 검색으로
+// 맛별 경쟁 판매처(배송비 포함)와 가격비교 최저가·판매처 수를 보내 온다. 화면은 북마클릿 값과 비교해 더 최근 것을 쓴다.
+const ONLINE_AUTO_KEEP = 8; // 맛마다 저장하는 판매처 수 (스크립트 속성 한 칸 9KB 한도)
+
+function onlineAuto_() {
+  const v = PropertiesService.getScriptProperties().getProperty('onlineAuto');
+  return v ? JSON.parse(v) : null;
+}
+
+function saveOnlineComps_(ss, state) {
+  if (!state || !state.skus) return { ok: false, error: 'no state' };
+  const at = String(state.at || new Date().toISOString());
+  const num = function (v) { v = Math.round(Number(v)); return isFinite(v) && v > 0 ? v : null; };
+  const clean = { at: at, skus: {}, errors: (state.errors || []).slice(0, 5).map(function (e) { return String(e).slice(0, 120); }) };
+  SKU_IDS.forEach(function (id) {
+    const s = state.skus[id];
+    if (!s) return;
+    const comps = (s.comps || []).map(function (c) {
+      return { mall: String(c.mall || '').slice(0, 30), price: num(c.price), ship: num(c.ship) || 0, eff: num(c.eff) };
+    }).filter(function (c) { return c.eff; }).sort(function (a, b) { return a.eff - b.eff; }).slice(0, ONLINE_AUTO_KEEP);
+    const c = s.catalog;
+    clean.skus[id] = {
+      comps: comps,
+      catalog: c && num(c.low) ? { id: String(c.id || '').replace(/[^0-9]/g, ''), low: num(c.low), sellers: num(c.sellers) } : null,
+    };
+  });
+  PropertiesService.getScriptProperties().setProperty('onlineAuto', JSON.stringify(clean));
+  // 경쟁사 추이 차트(가격이력)에도 남긴다: 우리 값은 작업기의 최신 상태에서
+  const st = json_(ss.getSheetByName('상태').getRange('A1'));
+  const rows = [];
+  SKU_IDS.forEach(function (id) {
+    const a = clean.skus[id];
+    if (!a || !a.comps.length) return;
+    const s = st && st.skus && st.skus[id];
+    const c = a.comps;
+    rows.push([at, id, s ? s.price : '', s ? s.couponPrice : '', s ? s.stock : '',
+      c[0] ? c[0].mall : '', c[0] ? c[0].eff : '', c[1] ? c[1].mall : '', c[1] ? c[1].eff : '', c[2] ? c[2].mall : '', c[2] ? c[2].eff : '',
+      '자동 검색' + (a.catalog ? ' · 가격비교 최저 ' + a.catalog.low + ' (' + a.catalog.sellers + '곳)' : '')]);
+  });
+  if (rows.length) {
+    const hs = ss.getSheetByName('가격이력');
+    hs.getRange(hs.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+  }
+  return { ok: true, saved: Object.keys(clean.skus).length, history: rows.length };
 }
